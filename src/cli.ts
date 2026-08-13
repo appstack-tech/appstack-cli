@@ -4,6 +4,7 @@ import { hideBin } from "yargs/helpers";
 import pc from "picocolors";
 import { FRAMEWORK_LABEL, VERSION, type FrameworkId } from "@/constants";
 import { runWorkflow } from "@/commands/workflow";
+import { errorOutput, wantsJson, writeJson } from "@/output";
 import * as ui from "@/ui";
 
 const FRAMEWORKS = Object.keys(FRAMEWORK_LABEL) as FrameworkId[];
@@ -151,7 +152,8 @@ export async function run(): Promise<void> {
   try {
     await cli.parseAsync();
   } catch (error) {
-    ui.failure(error instanceof Error ? error.message : String(error));
+    if (wantsJson(args)) writeJson(errorOutput(error));
+    else ui.failure(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
 }

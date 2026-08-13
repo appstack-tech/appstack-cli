@@ -82,18 +82,55 @@ export async function resolveLatestVersion(
   }
 }
 
-function parts(version: string): [number, number, number] | undefined {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/);
+interface ParsedVersion {
+  core: [number, number, number];
+  prerelease: string[];
+}
+
+function parseVersion(version: string): ParsedVersion | undefined {
+  const match = version.match(
+    /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/,
+  );
   if (!match) return undefined;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  return {
+    core: [Number(match[1]), Number(match[2]), Number(match[3])],
+    prerelease: match[4]?.split(".") ?? [],
+  };
+}
+
+export function isValidVersion(version: string): boolean {
+  return parseVersion(version) !== undefined;
+}
+
+function comparePrerelease(left: string[], right: string[]): number {
+  if (!left.length && !right.length) return 0;
+  if (!left.length) return 1;
+  if (!right.length) return -1;
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index++) {
+    const a = left[index];
+    const b = right[index];
+    if (a === undefined) return -1;
+    if (b === undefined) return 1;
+    if (a === b) continue;
+    const aNumber = /^\d+$/.test(a) ? Number(a) : undefined;
+    const bNumber = /^\d+$/.test(b) ? Number(b) : undefined;
+    if (aNumber !== undefined && bNumber !== undefined) return aNumber - bNumber;
+    if (aNumber !== undefined) return -1;
+    if (bNumber !== undefined) return 1;
+    return a.localeCompare(b);
+  }
+  return 0;
 }
 
 export function compareVersions(left: string, right: string): number {
-  const a = parts(left);
-  const b = parts(right);
+  const a = parseVersion(left);
+  const b = parseVersion(right);
   if (!a || !b) return left.localeCompare(right);
   for (let index = 0; index < 3; index++) {
-    if (a[index]! !== b[index]!) return a[index]! - b[index]!;
+    if (a.core[index]! !== b.core[index]!) {
+      return a.core[index]! - b.core[index]!;
+    }
   }
-  return 0;
+  return comparePrerelease(a.prerelease, b.prerelease);
 }
