@@ -42,6 +42,7 @@ export const codexDriver: AgentDriver = {
       bin: "codex",
       args: codexArgs(options, output),
       cwd: options.cwd,
+      env: options.env,
       onStdout(line) {
         try {
           const value = JSON.parse(line) as Record<string, unknown>;

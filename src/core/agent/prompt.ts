@@ -9,7 +9,7 @@ export interface PromptOptions {
   workflow: WorkflowId;
   inspection: Inspection;
   latest?: LatestVersion;
-  apiKeys?: { generic?: string; ios?: string; android?: string };
+  apiKeys?: { generic?: boolean; ios?: boolean; android?: boolean };
   copyMode?: boolean;
 }
 
@@ -30,23 +30,29 @@ function inspectionText(inspection: Inspection): string {
   ].join("\n");
 }
 
-function keyContext(keys: PromptOptions["apiKeys"]): string {
+function keyContext(
+  keys: PromptOptions["apiKeys"],
+  copyMode: boolean,
+): string {
   if (!keys?.generic && !keys?.ios && !keys?.android) {
     return "No API key was supplied. Use an existing project environment/config value; never invent a key. If integration cannot be completed without one, explain exactly what is needed.";
   }
-  return [
-    keys.generic ? `Generic key: ${keys.generic}` : undefined,
-    keys.ios ? `iOS key: ${keys.ios}` : undefined,
-    keys.android ? `Android key: ${keys.android}` : undefined,
+  const variables = [
+    keys.generic ? "APPSTACK_API_KEY" : undefined,
+    keys.ios ? "APPSTACK_IOS_API_KEY" : undefined,
+    keys.android ? "APPSTACK_ANDROID_API_KEY" : undefined,
   ]
     .filter(Boolean)
-    .join("\n");
+    .join(", ");
+  return copyMode
+    ? `API key values are intentionally omitted from this copied playbook. Make ${variables} available in the destination agent's environment without printing their values.`
+    : `API key values are available in the agent environment as ${variables}. Read only the variables needed for configuration and never print their values.`;
 }
 
 function task(options: PromptOptions): string {
   switch (options.workflow) {
     case "integrate":
-      return `Integrate the Appstack SDK into this app. Make the smallest coherent set of edits. Detect and use the existing package manager and startup architecture. Configure exactly once, keep keys out of committed source using the project's established configuration mechanism, resolve dependencies, and run the narrowest meaningful build or tests. Do not add speculative events.\n\nAPI key context:\n${keyContext(options.apiKeys)}`;
+      return `Integrate the Appstack SDK into this app. Make the smallest coherent set of edits. Detect and use the existing package manager and startup architecture. Configure exactly once, keep keys out of committed source using the project's established configuration mechanism, resolve dependencies, and run the narrowest meaningful build or tests. Do not add speculative events.\n\nAPI key context:\n${keyContext(options.apiKeys, Boolean(options.copyMode))}`;
     case "review":
       return "Review the existing Appstack integration end to end. Do not modify files. Verify every claim against code or project configuration. Return concise markdown with: Setup health, Findings ordered by impact, Opportunities, Not verified, and Overall. Include absolute clickable file:line evidence for findings.";
     case "upgrade": {

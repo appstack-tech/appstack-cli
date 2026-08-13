@@ -22,12 +22,14 @@ export function spawnLines(options: {
   bin: string;
   args: string[];
   cwd: string;
+  env?: NodeJS.ProcessEnv;
   onStdout: (line: string) => void;
   onStderr?: (line: string) => void;
 }): Promise<number | null> {
   return new Promise((resolve, reject) => {
     const child = spawn(options.bin, options.args, {
       cwd: options.cwd,
+      env: options.env ?? process.env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     createInterface({ input: child.stdout }).on("line", options.onStdout);
