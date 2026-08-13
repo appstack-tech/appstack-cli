@@ -1,0 +1,4 @@
+interface:
+  display_name: "Appstack SDK"
+  short_description: "Integrate and use the Appstack mobile attribution SDKs: install, initialize, event taxonomy, enhanced app campaigns, partner integrations, and troubleshooting across Swift, Kotlin, React Native, Flutter, and Unity"
+  default_prompt: "Use $appstack-sdk to install and initialize the Appstack mobile attribution SDK on the platform in play (Swift, Kotlin, React Native, Flutter, or Unity), design a lean event taxonomy, wire enhanced app campaigns with revenue and matching parameters, connect partner integrations like Superwall or RevenueCat, and troubleshoot attribution or missing events."
