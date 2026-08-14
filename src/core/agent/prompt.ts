@@ -46,7 +46,7 @@ function keyContext(keys: PromptOptions["apiKeys"]): string {
 function task(options: PromptOptions): string {
   switch (options.workflow) {
     case "integrate":
-      return `Integrate the Appstack SDK into this app. Make the smallest coherent set of edits. Detect and use the existing package manager and startup architecture. Configure exactly once, keep keys out of committed source using the project's established configuration mechanism, resolve dependencies, and run the narrowest meaningful build or tests. Do not add speculative events.\n\nAPI key context:\n${keyContext(options.apiKeys)}`;
+      return `Integrate the Appstack SDK into this app. Make the smallest coherent set of edits. Detect and use the existing package manager and startup architecture. Configure exactly once, keep keys out of committed source using the project's established configuration mechanism, resolve dependencies, and run the narrowest meaningful build or tests. Do not add speculative events.\n\nAPI key context:\n${keyContext(options.copyMode ? undefined : options.apiKeys)}`;
     case "review":
       return "Review the existing Appstack integration end to end. Do not modify files. Verify every claim against code or project configuration. Return concise markdown with: Setup health, Findings ordered by impact, Opportunities, Not verified, and Overall. Include absolute clickable file:line evidence for findings.";
     case "upgrade": {

@@ -4,6 +4,7 @@ import { hideBin } from "yargs/helpers";
 import pc from "picocolors";
 import { FRAMEWORK_LABEL, VERSION, type FrameworkId } from "@/constants";
 import { runWorkflow } from "@/commands/workflow";
+import { canLaunchTui, promptForWorkflow } from "@/tui";
 import * as ui from "@/ui";
 
 const FRAMEWORKS = Object.keys(FRAMEWORK_LABEL) as FrameworkId[];
@@ -71,7 +72,21 @@ function printHelp(): void {
 
 export async function run(): Promise<void> {
   const args = hideBin(process.argv);
-  if (!args.length || args[0] === "help" || (args.length === 1 && ["-h", "--help"].includes(args[0]!))) {
+  if (!args.length) {
+    if (!canLaunchTui()) {
+      printHelp();
+      return;
+    }
+    try {
+      const workflow = await promptForWorkflow();
+      if (workflow) await runWorkflow(workflow);
+    } catch (error) {
+      ui.failure(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+  if (args[0] === "help" || (args.length === 1 && ["-h", "--help"].includes(args[0]!))) {
     printHelp();
     return;
   }

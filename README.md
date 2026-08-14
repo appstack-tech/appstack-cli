@@ -18,6 +18,12 @@ The CLI detects Swift/iOS, Kotlin/Android, React Native, Flutter, and Unity
 projects. It performs deterministic checks first, then runs Claude Code or Codex
 headlessly with the official framework-specific Appstack skill.
 
+Run `appstack` in an interactive terminal to open the guided TUI. It detects
+apps, lets you choose a workflow and execution mode, masks API-key entry, and
+asks for confirmation before an integration or upgrade can change files.
+The interface follows Appstack's monochrome identity using the terminal's native
+foreground and background, with color reserved for semantic status feedback.
+
 - `integrate` installs and configures the SDK using the app's existing package
   manager and startup architecture.
 - `review` combines deterministic checks with a read-only semantic audit.

@@ -31,3 +31,14 @@ test("copy mode omits the headless status protocol", () => {
   const prompt = buildPrompt({ workflow: "integrate", inspection, copyMode: true });
   assert.doesNotMatch(prompt, /Before each tool call/);
 });
+
+test("copy mode never renders supplied API-key values", () => {
+  const prompt = buildPrompt({
+    workflow: "integrate",
+    inspection,
+    apiKeys: { generic: "secret-value" },
+    copyMode: true,
+  });
+
+  assert.doesNotMatch(prompt, /secret-value/);
+});
