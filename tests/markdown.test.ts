@@ -20,20 +20,18 @@ Appstack.configure(apiKey: key)
 test("renders review markdown within the available terminal width", () => {
   const width = 48;
   const lines = renderTerminalMarkdown(review, width);
+  const rendered = stripVTControlCharacters(lines.join("\n"));
 
   assert.ok(lines.length > 8);
   assert.ok(
     lines.every((line) => Array.from(stripVTControlCharacters(line)).length <= width),
   );
-  assert.doesNotMatch(lines.join("\n"), /\*\*|```|\[[^\]]+\]\([^)]+\)/);
-  assert.doesNotMatch(lines.join("\n"), /`NSPrivacyCollectedDataTypes`/);
-  assert.match(lines.join("\n"), /1\. Privacy manifest is incomplete/);
-  assert.match(lines.join("\n"), /source evidence/);
-  assert.match(lines.join("\n"), /Appstack\.configure/);
-  assert.doesNotMatch(
-    stripVTControlCharacters(lines.join("\n")),
-    /\/Users\/example\/AppstackAttributionSdk/,
-  );
+  assert.doesNotMatch(rendered, /\*\*|```|\[[^\]]+\]\([^)]+\)/);
+  assert.doesNotMatch(rendered, /`NSPrivacyCollectedDataTypes`/);
+  assert.match(rendered, /1\. Privacy manifest is incomplete/);
+  assert.match(rendered, /source evidence/);
+  assert.match(rendered, /Appstack\.configure/);
+  assert.doesNotMatch(rendered, /\/Users\/example\/AppstackAttributionSdk/);
 });
 
 test("hard-wraps long paths instead of relying on the terminal", () => {
