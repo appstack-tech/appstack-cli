@@ -1,17 +1,23 @@
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
+import { constants } from "node:fs";
+import { access } from "node:fs/promises";
+import { delimiter, extname, join } from "node:path";
 import { createInterface } from "node:readline";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
 
 export async function onPath(bin: string): Promise<boolean> {
-  const probe = process.platform === "win32" ? "where" : "command";
-  const args = process.platform === "win32" ? [bin] : ["-v", bin];
+  const windows = process.platform === "win32";
+  const extensions =
+    windows && !extname(bin)
+      ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";")
+      : [""];
+  const candidates = (process.env.PATH ?? "")
+    .split(delimiter)
+    .filter(Boolean)
+    .flatMap((directory) => extensions.map((extension) => join(directory, `${bin}${extension}`)));
   try {
-    await execFileAsync(probe, args, {
-      shell: process.platform !== "win32",
-      timeout: 5_000,
-    });
+    await Promise.any(
+      candidates.map((candidate) => access(candidate, windows ? constants.F_OK : constants.X_OK)),
+    );
     return true;
   } catch {
     return false;

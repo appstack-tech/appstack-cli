@@ -1,5 +1,6 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import { renderTerminalMarkdown, reportWidth } from "@/markdown";
 import { configurePromptTheme, theme } from "@/theme";
 
 configurePromptTheme();
@@ -65,8 +66,14 @@ export function failure(message: string): void {
 
 export function report(message: string): void {
   stopActiveSpinner();
-  if (interactive) p.note(message.trimEnd(), "Agent report");
-  else process.stdout.write(`${message.trimEnd()}\n`);
+  if (!interactive) {
+    process.stdout.write(`${message.trimEnd()}\n`);
+    return;
+  }
+  p.log.message("Agent report", { symbol: theme.primary("◆") });
+  for (const line of renderTerminalMarkdown(message, reportWidth())) {
+    process.stdout.write(`${pc.dim("│")}${line ? `  ${line}` : ""}\n`);
+  }
 }
 
 export function status(message: string): void {
