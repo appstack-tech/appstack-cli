@@ -97,7 +97,7 @@ it.)
 await AppstackPlugin.sendEvent(EventType.signUp);
 await AppstackPlugin.sendEvent(EventType.login);
 
-// Purchase with revenue + (consented) matching params for EAC/Meta
+// Direct path: purchase with revenue + (consented) matching params for EAC/Meta
 await AppstackPlugin.sendEvent(
   EventType.purchase,
   parameters: {
@@ -201,6 +201,7 @@ await AppstackPlugin.configure(apiKey, logLevel: 0);
 - [ ] iOS-only calls guarded with `Platform.isIOS`.
 - [ ] `EventType.install` never sent manually.
 - [ ] Key flows use standard `EventType`s; custom events few and clean.
-- [ ] Revenue events include `revenue`/`price` + `currency` (+ matching params).
+- [ ] Revenue events include `revenue`/`price` + `currency`; consented matching
+      params are included there or were persisted by an earlier custom event.
 - [ ] Partner IDs/attributes set after `configure`, before first paywall.
 - [ ] Events visible on the Appstack SDK page before launch.

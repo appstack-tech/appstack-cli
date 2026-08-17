@@ -90,7 +90,7 @@ Event strings: `'LOGIN'`, `'SIGN_UP'`, `'REGISTER'`, `'PURCHASE'`, `'SUBSCRIBE'`
 await AppstackSDK.sendEvent('SIGN_UP');
 await AppstackSDK.sendEvent('LOGIN');
 
-// Purchase with revenue + (consented) matching params for EAC/Meta
+// Direct path: purchase with revenue + (consented) matching params for EAC/Meta
 await AppstackSDK.sendEvent('PURCHASE', null, {
   revenue: 29.99,
   currency: 'USD',
@@ -174,6 +174,7 @@ const offerings = await Purchases.setAppstackAttributionParams(params);
 - [ ] iOS-only calls guarded with `Platform.OS === 'ios'`.
 - [ ] `INSTALL` never sent manually; event strings uppercase.
 - [ ] Key flows use standard events; custom events few and clean.
-- [ ] Revenue events include `revenue`/`price` + `currency` (+ matching params).
+- [ ] Revenue events include `revenue`/`price` + `currency`; consented matching
+      params are included there or were persisted by an earlier custom event.
 - [ ] `expo-superwall` used for Superwall; partner attrs set after `configure`.
 - [ ] Events visible on the Appstack SDK page before launch.

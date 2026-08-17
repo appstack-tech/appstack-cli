@@ -12,6 +12,7 @@ import {
   type LatestVersion,
 } from "@/core/sdk/latest";
 import { verifyWorkflowPostconditions } from "@/core/sdk/postconditions";
+import { resolveSkill } from "@/core/skill/resolve";
 import { writeJson } from "@/output";
 import * as ui from "@/ui";
 
@@ -27,6 +28,7 @@ export interface WorkflowArgs {
   iosApiKey?: string;
   androidApiKey?: string;
   to?: string;
+  verbose?: boolean;
 }
 
 function printInspection(inspection: Inspection): void {
@@ -74,16 +76,23 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     return;
   }
 
+  const resolvedSkill = await resolveSkill({
+    framework: project.framework,
+    refresh: !args.dryRun,
+  });
+
   const prompt = buildPrompt({
     workflow: args.command,
     inspection,
     latest,
+    skill: resolvedSkill.body,
     apiKeys: {
       generic: Boolean(keyValues.generic),
       ios: Boolean(keyValues.ios),
       android: Boolean(keyValues.android),
     },
     copyMode: args.skill,
+    verbose: args.verbose,
   });
 
   if (args.skill) {
