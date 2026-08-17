@@ -29,12 +29,6 @@ export interface WorkflowArgs {
   to?: string;
 }
 
-function findingIcon(severity: string): string {
-  if (severity === "error") return pc.red("✗");
-  if (severity === "warning") return pc.yellow("!");
-  return pc.cyan("•");
-}
-
 function printInspection(inspection: Inspection): void {
   ui.info(
     `${inspection.project.frameworkLabel} · ${inspection.project.relativePath} · SDK ${inspection.installedVersion ?? "not detected"}`,
@@ -44,8 +38,9 @@ function printInspection(inspection: Inspection): void {
     return;
   }
   for (const finding of inspection.findings) {
-    process.stdout.write(
-      `${findingIcon(finding.severity)} ${finding.message}${finding.files?.length ? ` ${pc.dim(`(${finding.files.join(", ")})`)}` : ""}\n`,
+    ui.finding(
+      finding.severity,
+      `${finding.message}${finding.files?.length ? ` ${pc.dim(`(${finding.files.join(", ")})`)}` : ""}`,
     );
   }
 }
@@ -110,6 +105,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     }
     if (compareVersions(inspection.installedVersion, latest.version) >= 0) {
       ui.success(`Already on Appstack SDK ${inspection.installedVersion}.`);
+      ui.outro("Nothing to upgrade");
       return;
     }
     ui.info(`Upgrade target ${latest.version} · ${latest.source}`);
@@ -117,6 +113,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
 
   if (args.dryRun) {
     ui.info("Dry run: no agent started and no files changed.");
+    ui.outro("Inspection complete");
     return;
   }
 
@@ -124,6 +121,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
   if (!driver) {
     if (args.command === "review") {
       ui.warning("No Claude Code or Codex installation found; showing deterministic review only.");
+      ui.outro("Review complete");
       return;
     }
     throw new Error(
@@ -131,22 +129,34 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     );
   }
 
-  ui.info(`Running ${driver.displayName} in ${args.command === "review" ? "read-only" : "read-write"} mode.`);
-  const result = await driver.run({
-    prompt,
-    cwd: project.path,
-    env: {
-      ...process.env,
-      ...(keyValues.generic ? { APPSTACK_API_KEY: keyValues.generic } : {}),
-      ...(keyValues.ios ? { APPSTACK_IOS_API_KEY: keyValues.ios } : {}),
-      ...(keyValues.android ? { APPSTACK_ANDROID_API_KEY: keyValues.android } : {}),
-    },
-    capabilities:
-      args.command === "review"
-        ? { filesystem: "read", network: true, shell: "read-only" }
-        : { filesystem: "write", network: true, shell: "unrestricted" },
-    onStatus: ui.status,
-  });
+  ui.status(
+    `Running ${driver.displayName} in ${args.command === "review" ? "read-only" : "read-write"} mode`,
+  );
+  let result;
+  try {
+    result = await driver.run({
+      prompt,
+      cwd: project.path,
+      env: {
+        ...process.env,
+        ...(keyValues.generic ? { APPSTACK_API_KEY: keyValues.generic } : {}),
+        ...(keyValues.ios ? { APPSTACK_IOS_API_KEY: keyValues.ios } : {}),
+        ...(keyValues.android ? { APPSTACK_ANDROID_API_KEY: keyValues.android } : {}),
+      },
+      capabilities:
+        args.command === "review"
+          ? { filesystem: "read", network: true, shell: "read-only" }
+          : { filesystem: "write", network: true, shell: "unrestricted" },
+      onStatus: ui.status,
+    });
+  } catch (error) {
+    ui.stopStatus(`${driver.displayName} stopped`, false);
+    throw error;
+  }
+  ui.stopStatus(
+    result.ok ? `${driver.displayName} completed` : `${driver.displayName} stopped`,
+    result.ok,
+  );
   if (!result.ok) throw new Error(`${driver.displayName} stopped before finishing.`);
 
   if (result.finalText) ui.report(result.finalText);
@@ -173,4 +183,5 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
       );
     }
   }
+  ui.outro(`${args.command === "review" ? "Review" : "Workflow"} complete`);
 }

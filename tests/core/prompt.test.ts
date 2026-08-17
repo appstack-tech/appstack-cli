@@ -31,3 +31,15 @@ test("copy mode omits the headless status protocol", () => {
   const prompt = buildPrompt({ workflow: "integrate", inspection, copyMode: true });
   assert.doesNotMatch(prompt, /Before each tool call/);
 });
+
+test("copy mode identifies available keys without embedding values", () => {
+  const prompt = buildPrompt({
+    workflow: "integrate",
+    inspection,
+    apiKeys: { generic: true },
+    copyMode: true,
+  });
+
+  assert.match(prompt, /APPSTACK_API_KEY/);
+  assert.match(prompt, /values are intentionally omitted/);
+});

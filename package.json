@@ -24,6 +24,7 @@
     "prepublishOnly": "npm run typecheck && npm test"
   },
   "dependencies": {
+    "@clack/prompts": "^0.11.0",
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1",
     "yargs": "^17.7.2"
