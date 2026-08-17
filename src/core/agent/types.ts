@@ -9,6 +9,7 @@ export interface AgentCapabilities {
 export interface AgentOptions {
   prompt: string;
   cwd: string;
+  env?: NodeJS.ProcessEnv;
   capabilities: AgentCapabilities;
   onStatus?: (message: string) => void;
 }

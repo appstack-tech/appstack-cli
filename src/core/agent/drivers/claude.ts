@@ -34,6 +34,7 @@ export const claudeDriver: AgentDriver = {
       bin: "claude",
       args: claudeArgs(options),
       cwd: options.cwd,
+      env: options.env,
       onStdout(line) {
         try {
           const message = JSON.parse(line) as Record<string, unknown>;

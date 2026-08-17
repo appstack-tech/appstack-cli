@@ -7,9 +7,12 @@ import { resolveProject } from "@/core/project/scan";
 import { inspectProject, type Inspection } from "@/core/sdk/inspect";
 import {
   compareVersions,
+  isValidVersion,
   resolveLatestVersion,
   type LatestVersion,
 } from "@/core/sdk/latest";
+import { verifyWorkflowPostconditions } from "@/core/sdk/postconditions";
+import { writeJson } from "@/output";
 import * as ui from "@/ui";
 
 export interface WorkflowArgs {
@@ -45,13 +48,12 @@ function printInspection(inspection: Inspection): void {
 async function upgradeTarget(args: WorkflowArgs): Promise<LatestVersion | undefined> {
   if (args.command !== "upgrade") return undefined;
   if (args.to && args.to !== "latest") {
+    if (!isValidVersion(args.to)) {
+      throw new Error(`Invalid SDK version "${args.to}". Pass a semantic version such as 2.6.0.`);
+    }
     return { version: args.to, source: "--to" };
   }
   return resolveLatestVersion(args.framework!);
-}
-
-function jsonOutput(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
 export async function runWorkflow(args: WorkflowArgs): Promise<void> {
@@ -61,8 +63,14 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
   const inspection = inspectProject(project);
   const latest = await upgradeTarget(args);
 
+  const keyValues = {
+    generic: args.apiKey ?? process.env.APPSTACK_API_KEY,
+    ios: args.iosApiKey ?? process.env.APPSTACK_IOS_API_KEY,
+    android: args.androidApiKey ?? process.env.APPSTACK_ANDROID_API_KEY,
+  };
+
   if (args.json) {
-    jsonOutput({ inspection, ...(latest ? { latest } : {}) });
+    writeJson({ inspection, ...(latest ? { latest } : {}) });
     return;
   }
 
@@ -70,13 +78,11 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     workflow: args.command,
     inspection,
     latest,
-    apiKeys: args.skill
-      ? undefined
-      : {
-          generic: args.apiKey ?? process.env.APPSTACK_API_KEY,
-          ios: args.iosApiKey ?? process.env.APPSTACK_IOS_API_KEY,
-          android: args.androidApiKey ?? process.env.APPSTACK_ANDROID_API_KEY,
-        },
+    apiKeys: {
+      generic: Boolean(keyValues.generic),
+      ios: Boolean(keyValues.ios),
+      android: Boolean(keyValues.android),
+    },
     copyMode: args.skill,
   });
 
@@ -131,6 +137,12 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     result = await driver.run({
       prompt,
       cwd: project.path,
+      env: {
+        ...process.env,
+        ...(keyValues.generic ? { APPSTACK_API_KEY: keyValues.generic } : {}),
+        ...(keyValues.ios ? { APPSTACK_IOS_API_KEY: keyValues.ios } : {}),
+        ...(keyValues.android ? { APPSTACK_ANDROID_API_KEY: keyValues.android } : {}),
+      },
       capabilities:
         args.command === "review"
           ? { filesystem: "read", network: true, shell: "read-only" }
@@ -150,11 +162,25 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
   if (result.finalText) ui.report(result.finalText);
   if (args.command !== "review") {
     const after = inspectProject(project);
+    const verification = verifyWorkflowPostconditions({
+      workflow: args.command,
+      after,
+      targetVersion: latest?.version,
+    });
+    if (!verification.ok) {
+      throw new Error(
+        `${driver.displayName} exited successfully, but ${args.command} verification failed: ${verification.errors.join(" ")}`,
+      );
+    }
     if (after.findings.length) {
       ui.warning("The workflow finished with remaining deterministic findings:");
       printInspection(after);
     } else {
-      ui.success("The Appstack integration passes deterministic checks.");
+      ui.success(
+        args.command === "upgrade"
+          ? `Verified Appstack SDK ${after.installedVersion}.`
+          : "Verified the Appstack SDK dependency and initialization.",
+      );
     }
   }
   ui.outro(`${args.command === "review" ? "Review" : "Workflow"} complete`);
