@@ -55,11 +55,11 @@ The CLI never creates keys and instructs the agent not to print key values.
 
 The npm package includes a known-good Appstack SDK skill so workflows also work
 offline. On normal `integrate`, `review`, `upgrade`, and `--skill` runs, the CLI
-checks at most once every 24 hours for the latest commit that changed the public
-skill. It downloads every skill file from that exact commit, validates the
-runtime manifest, and atomically activates the cached snapshot. A failed check
-keeps using the last valid cache (or the bundled copy) and is retried after one
-hour.
+checks at most once every 24 hours for the latest published `appstack-skills`
+GitHub Release. It downloads `appstack-skills.zip`, verifies the SHA-256 digest
+published by GitHub, extracts only the Appstack SDK skill, and atomically
+activates the cached release. A failed check keeps using the last valid cache
+(or the bundled copy) and is retried after one hour.
 
 `--dry-run` and `--json` never refresh or write the skill cache. Set
 `APPSTACK_SKILL_UPDATES=off` to disable network refreshes, or
@@ -77,7 +77,7 @@ src/
     ├── project/scan.ts     framework and app detection
     ├── sdk/inspect.ts      deterministic integration checks
     ├── sdk/latest.ts       official registry version lookup
-    ├── skill/              commit-pinned skill updates and cache
+    ├── skill/              release-pinned skill updates and cache
     └── agent/              skill composition and Claude/Codex drivers
 skills/appstack-sdk/        bundled official skill and one reference per platform
 ```

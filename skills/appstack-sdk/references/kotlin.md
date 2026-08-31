@@ -92,7 +92,7 @@ required only when `event = CUSTOM`.
 AppstackAttributionSdk.sendEvent(EventType.SIGN_UP)
 AppstackAttributionSdk.sendEvent(EventType.LOGIN)
 
-// Direct path: purchase with revenue + (consented) matching params for EAC/Meta
+// Purchase with revenue + (consented) matching params for EAC/Meta
 AppstackAttributionSdk.sendEvent(
     EventType.PURCHASE,
     parameters = mapOf(
@@ -198,7 +198,6 @@ AppstackAttributionSdk.configure(
 - [ ] `configure` runs once from `Application.onCreate()` before any event.
 - [ ] `INSTALL` never sent manually.
 - [ ] Key flows use standard `EventType`s; custom events few and clean.
-- [ ] Revenue events include `revenue`/`price` + `currency`; consented matching
-      params are included there or were persisted by an earlier custom event.
+- [ ] Revenue events include `revenue`/`price` + `currency` (+ matching params).
 - [ ] Partner IDs/attributes set after `configure`, before first paywall.
 - [ ] Events visible on the Appstack SDK page before launch.

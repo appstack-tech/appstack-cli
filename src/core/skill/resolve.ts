@@ -8,7 +8,7 @@ import {
   skillCacheRoot,
   writeSkillState,
 } from "./cache";
-import { fetchLatestSkillSha, fetchSkillSnapshot } from "./remote";
+import { downloadSkillRelease, fetchLatestSkillRelease } from "./remote";
 import type { ResolveSkillOptions, ResolvedSkill, SkillCacheState } from "./types";
 
 const SUCCESS_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -73,19 +73,19 @@ export async function resolveSkill(
 
   const fetcher = options.fetch ?? globalThis.fetch;
   try {
-    const sha = await fetchLatestSkillSha(fetcher);
-    if (cached && state.activeSha === sha) {
+    const release = await fetchLatestSkillRelease(fetcher);
+    if (cached && state.activeRelease === release.version) {
       await writeSkillState(root, {
-        activeSha: sha,
+        activeRelease: release.version,
         checkedAt: new Date(now).toISOString(),
       });
       return cached;
     }
 
-    const snapshot = await fetchSkillSnapshot(sha, fetcher);
+    const snapshot = await downloadSkillRelease(release, fetcher);
     await installSkillSnapshot(root, snapshot);
     const nextState: SkillCacheState = {
-      activeSha: sha,
+      activeRelease: release.version,
       checkedAt: new Date(now).toISOString(),
     };
     await writeSkillState(root, nextState);

@@ -1,72 +1,99 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { strToU8, zipSync } from "fflate";
 import { resolveSkill } from "@/core/skill/resolve";
 import { REQUIRED_SKILL_FILES } from "@/core/skill/types";
 
-const SHA = "a".repeat(40);
-const NOW = Date.parse("2026-08-17T10:00:00Z");
+const RELEASE = "1.2.0";
+const NOW = Date.parse("2026-09-01T10:00:00Z");
+const ASSET_URL =
+  `https://github.com/appstack-tech/appstack-skills/releases/download/${RELEASE}/appstack-skills.zip`;
 
 function cacheRoot(): string {
   return mkdtempSync(join(tmpdir(), "appstack-skill-cache-"));
 }
 
-function remoteFiles(minimumCliVersion = "0.1.0"): Record<string, string> {
-  const files: Record<string, string> = {
-    "runtime.json": JSON.stringify({
-      schemaVersion: 1,
-      minimumCliVersion,
-      files: [...REQUIRED_SKILL_FILES],
-    }),
-    "SKILL.md": "---\nname: appstack-sdk\ndescription: Remote fixture\n---\n\n# Remote Appstack SDK\n",
-  };
+function skillArchive(missing?: string): Uint8Array {
+  const files: Record<string, Uint8Array> = {};
   for (const path of REQUIRED_SKILL_FILES) {
-    if (path === "SKILL.md") continue;
-    const framework = path.split("/").at(-1)?.replace(".md", "");
-    files[path] = `# Remote ${framework}\n`;
+    if (path === missing) continue;
+    const content =
+      path === "SKILL.md"
+        ? "---\nname: appstack-sdk\ndescription: Remote fixture\n---\n\n# Released Appstack SDK\n"
+        : `# Released ${path.split("/").at(-1)?.replace(".md", "")}\n`;
+    files[`skills/appstack-sdk/${path}`] = strToU8(content);
   }
-  return files;
+  files["skills/appstack-support/SKILL.md"] = strToU8("# Unrelated skill\n");
+  return zipSync(files);
+}
+
+interface GitHubFetchOptions {
+  release?: string;
+  digest?: string;
+  missing?: string;
 }
 
 function githubFetch(
-  files: Record<string, string>,
   calls: string[],
+  options: GitHubFetchOptions = {},
 ): typeof globalThis.fetch {
+  const release = options.release ?? RELEASE;
+  const archive = skillArchive(options.missing);
+  const digest =
+    options.digest ??
+    `sha256:${createHash("sha256").update(archive).digest("hex")}`;
+  const assetUrl =
+    `https://github.com/appstack-tech/appstack-skills/releases/download/${release}/appstack-skills.zip`;
+
   return (async (input: string | URL | Request) => {
     const url = String(input);
     calls.push(url);
     if (url.includes("api.github.com")) {
-      return new Response(JSON.stringify([{ sha: SHA }]), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          tag_name: release,
+          assets: [
+            {
+              name: "appstack-skills.zip",
+              browser_download_url: assetUrl,
+              digest,
+              size: archive.byteLength,
+            },
+          ],
+        }),
+        { status: 200 },
+      );
     }
-    const marker = "/plugins/appstack/skills/appstack-sdk/";
-    const path = url.slice(url.indexOf(marker) + marker.length);
-    const body = files[path];
-    return body === undefined
-      ? new Response("missing", { status: 404 })
-      : new Response(body, { status: 200 });
+    if (url === assetUrl) return new Response(archive, { status: 200 });
+    return new Response("missing", { status: 404 });
   }) as typeof globalThis.fetch;
 }
 
-test("downloads one commit-pinned snapshot and reuses the fresh cache", async () => {
+test("downloads the latest skill release and reuses the fresh cache", async () => {
   const root = cacheRoot();
   const calls: string[] = [];
   const first = await resolveSkill({
     framework: "swift",
     refresh: true,
     cacheRoot: root,
-    fetch: githubFetch(remoteFiles(), calls),
+    fetch: githubFetch(calls),
     now: NOW,
     env: {},
   });
 
   assert.equal(first.source, "cache");
-  assert.equal(first.sha, SHA);
-  assert.match(first.body, /Remote Appstack SDK/);
-  assert.match(first.body, /Remote swift/);
-  assert.doesNotMatch(first.body, /Remote unity/);
-  assert.equal(calls.every((url) => !url.includes("/main/")), true);
+  assert.equal(first.release, RELEASE);
+  assert.match(first.body, /Released Appstack SDK/);
+  assert.match(first.body, /Released swift/);
+  assert.doesNotMatch(first.body, /Released unity/);
+  assert.deepEqual(calls, [
+    "https://api.github.com/repos/appstack-tech/appstack-skills/releases/latest",
+    ASSET_URL,
+  ]);
 
   let fetchedAgain = false;
   const second = await resolveSkill({
@@ -81,31 +108,44 @@ test("downloads one commit-pinned snapshot and reuses the fresh cache", async ()
     env: {},
   });
   assert.equal(second.source, "cache");
-  assert.match(second.body, /Remote unity/);
+  assert.match(second.body, /Released unity/);
   assert.equal(fetchedAgain, false);
 });
 
-test("bootstraps repositories that do not have a runtime manifest yet", async () => {
-  const root = cacheRoot();
-  const files = remoteFiles();
-  delete files["runtime.json"];
-
-  const result = await resolveSkill({
+test("invalid, incompatible, and incomplete releases fall back safely", async () => {
+  const invalidDigest = await resolveSkill({
     framework: "swift",
     refresh: true,
-    cacheRoot: root,
-    fetch: githubFetch(files, []),
+    cacheRoot: cacheRoot(),
+    fetch: githubFetch([], { digest: `sha256:${"0".repeat(64)}` }),
     now: NOW,
     env: {},
   });
+  assert.equal(invalidDigest.source, "bundled");
 
-  assert.equal(result.source, "cache");
-  assert.equal(result.sha, SHA);
-  assert.match(result.body, /Remote Appstack SDK/);
+  const incompatible = await resolveSkill({
+    framework: "swift",
+    refresh: true,
+    cacheRoot: cacheRoot(),
+    fetch: githubFetch([], { release: "2.0.0" }),
+    now: NOW,
+    env: {},
+  });
+  assert.equal(incompatible.source, "bundled");
+
+  const incomplete = await resolveSkill({
+    framework: "swift",
+    refresh: true,
+    cacheRoot: cacheRoot(),
+    fetch: githubFetch([], { missing: "references/swift.md" }),
+    now: NOW,
+    env: {},
+  });
+  assert.equal(incomplete.source, "bundled");
 });
 
-test("offline and incompatible updates fall back without failing", async () => {
-  const offline = await resolveSkill({
+test("offline updates fall back without failing", async () => {
+  const result = await resolveSkill({
     framework: "swift",
     refresh: true,
     cacheRoot: cacheRoot(),
@@ -115,17 +155,7 @@ test("offline and incompatible updates fall back without failing", async () => {
     now: NOW,
     env: {},
   });
-  assert.equal(offline.source, "bundled");
-
-  const incompatible = await resolveSkill({
-    framework: "swift",
-    refresh: true,
-    cacheRoot: cacheRoot(),
-    fetch: githubFetch(remoteFiles("99.0.0"), []),
-    now: NOW,
-    env: {},
-  });
-  assert.equal(incompatible.source, "bundled");
+  assert.equal(result.source, "bundled");
 });
 
 test("dry resolution does not create skill cache files", async () => {

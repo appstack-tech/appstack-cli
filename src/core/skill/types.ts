@@ -1,7 +1,5 @@
 import type { FrameworkId } from "@/constants";
 
-export const SKILL_SCHEMA_VERSION = 1;
-
 export const REQUIRED_SKILL_FILES = [
   "SKILL.md",
   "references/swift.md",
@@ -11,14 +9,8 @@ export const REQUIRED_SKILL_FILES = [
   "references/unity.md",
 ] as const;
 
-export interface SkillRuntimeManifest {
-  schemaVersion: number;
-  minimumCliVersion: string;
-  files: string[];
-}
-
 export interface SkillCacheState {
-  activeSha?: string;
+  activeRelease?: string;
   checkedAt?: string;
   failedAt?: string;
 }
@@ -26,7 +18,7 @@ export interface SkillCacheState {
 export interface ResolvedSkill {
   body: string;
   source: "bundled" | "cache" | "override";
-  sha?: string;
+  release?: string;
 }
 
 export interface ResolveSkillOptions {

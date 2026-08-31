@@ -129,7 +129,7 @@ For any event representing revenue (`PURCHASE`, `SUBSCRIBE`, `START_TRIAL`, …)
   string (`"USD"`, `"EUR"`). Revenue ranges are configured in the Appstack
   platform and synchronized automatically.
 
-To improve match quality on Meta and TikTok, provide these **matching
+To improve match quality on Meta and TikTok, include these **matching
 parameters** when the app has consent. Appstack **encrypts them automatically**
 before matching:
 
@@ -139,19 +139,8 @@ before matching:
 - `date_of_birth` — `YYYY-MM-DD` (also `birthdate` / `birthday` / `dateOfBirth`)
 - `gender`
 
-These are the single biggest lever on EAC performance. They do **not** have to be
-repeated on every revenue event. Use either of these paths:
-
-1. Include them directly on the revenue event.
-2. Send them on an earlier custom event (for example, `user_attributes`). The
-   Appstack backend persists them as subscriber attributes and can reuse and
-   forward them with a later revenue event when the Meta integration is already
-   configured for that forwarding.
-
-The earlier custom event must reach Appstack before the revenue event. If that
-ordering is not guaranteed, or an attribute has changed, include the current
-value on the revenue event. This exception applies only to matching parameters:
-every revenue event must still carry `revenue`/`price` and `currency`.
+These are the single biggest lever on EAC performance — send them on revenue
+events wherever consent allows.
 
 ## Partner integrations (Superwall, RevenueCat)
 
@@ -243,9 +232,8 @@ New integration:
    controls for diagnostics.
 4. Design a **small** event set: map real user actions to standard `EventType`s
    first; add at most a handful of clean `CUSTOM` events.
-5. Add `revenue` + `currency` to every revenue event. Where consented, include
-   matching params on the revenue event or persist them first through an earlier
-   custom event.
+5. Add `revenue` + `currency` (and matching params where consented) to revenue
+   events.
 6. On iOS, enable Apple Ads attribution in the ATT flow.
 7. Wire partner integrations after Appstack config, before the first paywall.
 8. Verify events appear on the Appstack **SDK** page before enabling downstream
