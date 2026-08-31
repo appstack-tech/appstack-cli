@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Inspection } from "@/core/sdk/inspect";
 import { buildPrompt } from "@/core/agent/prompt";
+import { loadSkill } from "@/core/agent/skill";
 
 const inspection: Inspection = {
   project: {
@@ -18,6 +19,7 @@ const inspection: Inspection = {
   customEventNames: [],
   findings: [],
 };
+const skill = loadSkill("swift");
 
 test("API key values never enter generated or copied prompts", () => {
   const secret = "pk_test_must_not_appear_123456";
@@ -25,11 +27,13 @@ test("API key values never enter generated or copied prompts", () => {
   const headless = buildPrompt({
     workflow: "integrate",
     inspection,
+    skill,
     apiKeys: availability,
   });
   const copied = buildPrompt({
     workflow: "integrate",
     inspection,
+    skill,
     apiKeys: availability,
     copyMode: true,
   });

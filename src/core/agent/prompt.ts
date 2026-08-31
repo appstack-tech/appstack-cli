@@ -1,7 +1,5 @@
-import type { FrameworkId } from "@/constants";
 import type { Inspection } from "@/core/sdk/inspect";
 import type { LatestVersion } from "@/core/sdk/latest";
-import { loadSkill } from "./skill";
 
 export type WorkflowId = "integrate" | "review" | "upgrade";
 
@@ -9,8 +7,10 @@ export interface PromptOptions {
   workflow: WorkflowId;
   inspection: Inspection;
   latest?: LatestVersion;
+  skill: string;
   apiKeys?: { generic?: boolean; ios?: boolean; android?: boolean };
   copyMode?: boolean;
+  verbose?: boolean;
 }
 
 function inspectionText(inspection: Inspection): string {
@@ -54,7 +54,21 @@ function task(options: PromptOptions): string {
     case "integrate":
       return `Integrate the Appstack SDK into this app. Make the smallest coherent set of edits. Detect and use the existing package manager and startup architecture. Configure exactly once, keep keys out of committed source using the project's established configuration mechanism, resolve dependencies, and run the narrowest meaningful build or tests. Do not add speculative events.\n\nAPI key context:\n${keyContext(options.apiKeys, Boolean(options.copyMode))}`;
     case "review":
-      return "Review the existing Appstack integration end to end. Do not modify files. Verify every claim against code or project configuration. Return concise markdown with: Setup health, Findings ordered by impact, Opportunities, Not verified, and Overall. Include absolute clickable file:line evidence for findings.";
+      return options.verbose
+        ? "Review the existing Appstack integration end to end. Do not modify files. Verify every claim against code or project configuration. Return markdown with: Setup health, Findings ordered by impact, Opportunities, Needs confirmation, and Overall. Include absolute clickable file:line evidence for findings."
+        : `Review the existing Appstack integration. Do not modify files.
+
+Return a short markdown report only:
+- Overall: one sentence.
+- Findings: at most 5 verified, actionable problems, ordered by impact. For each give one-line Impact, Evidence (absolute clickable file:line), and Change.
+- Needs confirmation: at most 3 consequential items that cannot be verified from the repository.
+
+Strict classification rules:
+- A finding must be proven from repository evidence and require a concrete change.
+- Do not classify absent checked-in API keys as a finding; hosted build systems such as EAS may inject them. Put this under Needs confirmation only when consequential.
+- Ignoring configure()'s boolean return is not automatically a finding. Report it only when the app falsely announces success, proceeds unsafely, or otherwise mishandles failure; keep it low priority.
+- Missing optional events or consent-dependent matching parameters are opportunities, not findings, unless the app's intended behavior proves they are required.
+- Omit healthy checks, exhaustive inventories, low-value observations, and optional improvements from the default report.`;
     case "upgrade": {
       const latest = options.latest?.version ?? "not resolved by the CLI";
       const source = options.latest?.source ?? "unknown source";
@@ -81,7 +95,7 @@ export function buildPrompt(options: PromptOptions): string {
     statusRules,
     "</appstack-cli>",
     "",
-    loadSkill(options.inspection.project.framework as FrameworkId),
+    options.skill,
   ]
     .filter((line) => line !== "")
     .join("\n");

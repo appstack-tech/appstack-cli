@@ -32,9 +32,12 @@ foreground and background, with color reserved for semantic status feedback.
 
 Use `--skill` to print the full project-specific playbook instead of running an
 agent, `--dry-run` to inspect only, and `--json` for the deterministic inspection.
+Reviews are concise by default: one overall status, up to five verified findings,
+and a short needs-confirmation list. Add `--verbose` for the exhaustive audit.
 
 ```bash
 appstack review --json
+appstack review --verbose
 appstack integrate --skill
 appstack upgrade --to 2.6.0 --dry-run
 ```
@@ -48,6 +51,22 @@ APPSTACK_IOS_API_KEY=... APPSTACK_ANDROID_API_KEY=... appstack integrate
 
 The CLI never creates keys and instructs the agent not to print key values.
 
+## Skill updates
+
+The npm package includes a known-good Appstack SDK skill so workflows also work
+offline. On normal `integrate`, `review`, `upgrade`, and `--skill` runs, the CLI
+checks at most once every 24 hours for the latest published `appstack-skills`
+GitHub Release. It downloads `appstack-skills.zip`, verifies the SHA-256 digest
+published by GitHub, extracts only the Appstack SDK skill, and atomically
+activates the cached release. A failed check keeps using the last valid cache
+(or the bundled copy) and is retried after one hour.
+
+`--dry-run` and `--json` never refresh or write the skill cache. Set
+`APPSTACK_SKILL_UPDATES=off` to disable network refreshes, or
+`APPSTACK_SKILL_DIR=/path/to/appstack-sdk` to use a local development copy.
+`APPSTACK_CACHE_DIR` overrides the cache base directory for tests and managed
+environments.
+
 ## Architecture
 
 ```text
@@ -58,6 +77,7 @@ src/
     ├── project/scan.ts     framework and app detection
     ├── sdk/inspect.ts      deterministic integration checks
     ├── sdk/latest.ts       official registry version lookup
+    ├── skill/              release-pinned skill updates and cache
     └── agent/              skill composition and Claude/Codex drivers
 skills/appstack-sdk/        bundled official skill and one reference per platform
 ```

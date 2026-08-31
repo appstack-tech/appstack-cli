@@ -120,7 +120,11 @@ export async function run(): Promise<void> {
     .command(
       "review",
       "Audit an Appstack SDK integration without modifying files",
-      workflowOptions,
+      (y) =>
+        workflowOptions(y).option("verbose", {
+          type: "boolean",
+          describe: "Include setup health, opportunities, and exhaustive detail",
+        }),
       (argv) =>
         runWorkflow({
           command: "review",
@@ -130,6 +134,7 @@ export async function run(): Promise<void> {
           skill: argv.skill,
           dryRun: argv.dryRun,
           json: argv.json,
+          verbose: argv.verbose,
         }),
     )
     .command(
