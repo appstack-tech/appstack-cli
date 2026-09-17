@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import type { Inspection } from "@/core/sdk/inspect";
 import { buildPrompt } from "@/core/agent/prompt";
-import { loadSkill } from "@/core/agent/skill";
+import { loadSkillFromRoot } from "@/core/agent/skill";
+
+const skillRoot = fileURLToPath(
+  new URL("../fixtures/appstack-sdk", import.meta.url),
+);
 
 const inspection: Inspection = {
   project: {
@@ -19,7 +24,7 @@ const inspection: Inspection = {
   customEventNames: [],
   findings: [],
 };
-const skill = loadSkill("swift");
+const skill = loadSkillFromRoot(skillRoot, "swift");
 
 test("API key values never enter generated or copied prompts", () => {
   const secret = "pk_test_must_not_appear_123456";

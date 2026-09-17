@@ -3,7 +3,7 @@ import { unzipSync } from "fflate";
 import type { SkillSnapshot } from "./cache";
 import { REQUIRED_SKILL_FILES } from "./types";
 
-const REPOSITORY = "appstack-tech/appstack-skills";
+export const SKILL_REPOSITORY = "appstack-tech/appstack-skills";
 const ASSET_NAME = "appstack-skills.zip";
 const SKILL_PREFIX = "skills/appstack-sdk/";
 const SUPPORTED_RELEASE_MAJOR = 1;
@@ -54,7 +54,7 @@ export async function fetchLatestSkillRelease(
   fetcher: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<SkillRelease> {
   const response = await fetcher(
-    `https://api.github.com/repos/${REPOSITORY}/releases/latest`,
+    `https://api.github.com/repos/${SKILL_REPOSITORY}/releases/latest`,
     requestOptions(2_000, "application/vnd.github+json"),
   );
   if (!response.ok) {
@@ -64,7 +64,7 @@ export async function fetchLatestSkillRelease(
   const release = (await response.json()) as GitHubRelease;
   const version = releaseVersion(release.tag_name);
   const asset = release.assets?.find((candidate) => candidate.name === ASSET_NAME);
-  const expectedUrl = `https://github.com/${REPOSITORY}/releases/download/${release.tag_name}/${ASSET_NAME}`;
+  const expectedUrl = `https://github.com/${SKILL_REPOSITORY}/releases/download/${release.tag_name}/${ASSET_NAME}`;
   if (
     !asset ||
     asset.browser_download_url !== expectedUrl ||

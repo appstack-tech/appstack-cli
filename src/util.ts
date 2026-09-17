@@ -1,6 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 
 export function readText(path: string): string | undefined {
   try {
@@ -17,16 +15,6 @@ export function readJson<T>(path: string): T | undefined {
     return JSON.parse(text) as T;
   } catch {
     return undefined;
-  }
-}
-
-export function packageRoot(): string {
-  let current = dirname(fileURLToPath(import.meta.url));
-  while (true) {
-    if (existsSync(join(current, "package.json"))) return current;
-    const parent = dirname(current);
-    if (parent === current) throw new Error("Could not locate the CLI package root.");
-    current = parent;
   }
 }
 

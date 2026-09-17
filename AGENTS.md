@@ -1,8 +1,9 @@
 # Appstack CLI contributor guide
 
 This repository is a thin deterministic harness around the official Appstack
-SDK skill. Keep domain expertise in `skills/appstack-sdk`; TypeScript should only
-contain detection, orchestration, version lookup, safety policy, and rendering.
+SDK skill. Keep domain expertise in the published `appstack-skills` repository;
+TypeScript should only contain detection, orchestration, version lookup, safety
+policy, and rendering.
 
 ## Command surface
 
@@ -15,9 +16,11 @@ contain detection, orchestration, version lookup, safety policy, and rendering.
 
 ## Skills
 
-`skills/appstack-sdk` is copied from the public `appstack-skills` repository.
-Compose the shared `SKILL.md` with exactly one framework reference. Never load
-unrelated framework instructions into a run.
+The skill is never vendored or published with the CLI. At run time the CLI
+downloads the latest `appstack-skills` GitHub Release, caches it, and composes
+the shared `SKILL.md` with exactly one framework reference. If no cache exists
+and the network is unavailable, resolution must fail loudly rather than load a
+stale copy. Never load unrelated framework instructions into a run.
 
 ## Verification
 

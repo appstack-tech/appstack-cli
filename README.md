@@ -53,16 +53,17 @@ The CLI never creates keys and instructs the agent not to print key values.
 
 ## Skill updates
 
-The npm package includes a known-good Appstack SDK skill so workflows also work
-offline. On normal `integrate`, `review`, `upgrade`, and `--skill` runs, the CLI
-checks at most once every 24 hours for the latest published `appstack-skills`
-GitHub Release. It downloads `appstack-skills.zip`, verifies the SHA-256 digest
-published by GitHub, extracts only the Appstack SDK skill, and atomically
-activates the cached release. A failed check keeps using the last valid cache
-(or the bundled copy) and is retried after one hour.
+The CLI does not vendor the skill. On normal `integrate`, `review`, `upgrade`,
+and `--skill` runs it downloads the latest published `appstack-skills` GitHub
+Release, verifies the SHA-256 digest published by GitHub, extracts only the
+Appstack SDK skill, and atomically activates the cached release. It checks at
+most once every 24 hours; a failed check keeps using the last valid cache and is
+retried after one hour.
 
-`--dry-run` and `--json` never refresh or write the skill cache. Set
-`APPSTACK_SKILL_UPDATES=off` to disable network refreshes, or
+The first run requires network access. If no cached release exists and the
+release cannot be downloaded, the CLI fails with an actionable error instead of
+running a stale skill. `--dry-run` and `--json` never refresh or write the skill
+cache. Set `APPSTACK_SKILL_UPDATES=off` to disable network refreshes, or
 `APPSTACK_SKILL_DIR=/path/to/appstack-sdk` to use a local development copy.
 `APPSTACK_CACHE_DIR` overrides the cache base directory for tests and managed
 environments.
@@ -79,13 +80,12 @@ src/
     ├── sdk/latest.ts       official registry version lookup
     ├── skill/              release-pinned skill updates and cache
     └── agent/              skill composition and Claude/Codex drivers
-skills/appstack-sdk/        bundled official skill and one reference per platform
 ```
 
 The TypeScript harness contains project detection, version resolution, safety
-boundaries, and verification contracts. Appstack integration expertise belongs
-in the bundled skill, sourced from
-[`appstack-tech/appstack-skills`](https://github.com/appstack-tech/appstack-skills).
+boundaries, and verification contracts. Appstack integration expertise lives in
+[`appstack-tech/appstack-skills`](https://github.com/appstack-tech/appstack-skills)
+and is downloaded at run time rather than shipped with the package.
 
 ## Develop
 

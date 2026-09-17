@@ -1,6 +1,4 @@
-import { join } from "node:path";
 import { loadSkillFromRoot } from "@/core/agent/skill";
-import { packageRoot } from "@/util";
 import {
   installSkillSnapshot,
   loadCachedSkill,
@@ -8,7 +6,11 @@ import {
   skillCacheRoot,
   writeSkillState,
 } from "./cache";
-import { downloadSkillRelease, fetchLatestSkillRelease } from "./remote";
+import {
+  downloadSkillRelease,
+  fetchLatestSkillRelease,
+  SKILL_REPOSITORY,
+} from "./remote";
 import type { ResolveSkillOptions, ResolvedSkill, SkillCacheState } from "./types";
 
 const SUCCESS_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -26,13 +28,23 @@ function updatesDisabled(env: NodeJS.ProcessEnv): boolean {
   );
 }
 
-function bundledSkill(options: ResolveSkillOptions): ResolvedSkill {
-  const root =
-    options.bundledRoot ?? join(packageRoot(), "skills", "appstack-sdk");
-  return {
-    body: loadSkillFromRoot(root, options.framework),
-    source: "bundled",
-  };
+function unavailable(reason: string, cause?: unknown): Error {
+  const detail =
+    cause instanceof Error && cause.message ? ` (${cause.message})` : "";
+  return new Error(
+    `The Appstack skill is not available yet. ${reason}${detail} ` +
+      `The CLI downloads skills from ${SKILL_REPOSITORY} on GitHub, so the ` +
+      "first run needs network access. Connect and try again, or set " +
+      "APPSTACK_SKILL_DIR to a local copy.",
+  );
+}
+
+function cachedOrThrow(
+  cached: ResolvedSkill | undefined,
+  reason: string,
+): ResolvedSkill {
+  if (cached) return cached;
+  throw unavailable(reason);
 }
 
 async function recordFailure(
@@ -57,18 +69,31 @@ export async function resolveSkill(
     };
   }
 
-  const fallback = bundledSkill(options);
   const root = skillCacheRoot(options);
   const state = await readSkillState(root);
   const cached = await loadCachedSkill(root, state, options.framework);
-  if (!options.refresh || updatesDisabled(env)) return cached ?? fallback;
+  if (!options.refresh) {
+    return cachedOrThrow(
+      cached,
+      "Nothing is cached and this run does not update skills.",
+    );
+  }
+  if (updatesDisabled(env)) {
+    return cachedOrThrow(
+      cached,
+      "Skill updates are off and nothing is cached.",
+    );
+  }
 
   const now = options.now ?? Date.now();
   if (
     (cached && recent(state.checkedAt, now, SUCCESS_INTERVAL_MS)) ||
     recent(state.failedAt, now, FAILURE_INTERVAL_MS)
   ) {
-    return cached ?? fallback;
+    return cachedOrThrow(
+      cached,
+      "The last update failed and it retries in about an hour.",
+    );
   }
 
   const fetcher = options.fetch ?? globalThis.fetch;
@@ -89,9 +114,12 @@ export async function resolveSkill(
       checkedAt: new Date(now).toISOString(),
     };
     await writeSkillState(root, nextState);
-    return (await loadCachedSkill(root, nextState, options.framework)) ?? fallback;
-  } catch {
+    const installed = await loadCachedSkill(root, nextState, options.framework);
+    if (!installed) throw new Error("The downloaded skill could not be loaded.");
+    return installed;
+  } catch (error) {
     await recordFailure(root, state, now);
-    return cached ?? fallback;
+    if (cached) return cached;
+    throw unavailable("The latest release could not be downloaded.", error);
   }
 }
