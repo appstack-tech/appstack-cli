@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "[0-9]*.[0-9]*.[0-9]*"
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing v-prefixed tag to release
+        description: Existing semantic-version tag to release
         required: true
         type: string
 
@@ -46,13 +46,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Release tag must be a v-prefixed semantic version; got '$RELEASE_TAG'." >&2
+          if [[ ! "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must be a semantic version; got '$RELEASE_TAG'." >&2
             exit 1
           fi
 
           package_version="$(node --print "require('./package.json').version")"
-          if [[ "$RELEASE_TAG" != "v$package_version" ]]; then
+          if [[ "$RELEASE_TAG" != "$package_version" ]]; then
             echo "Tag '$RELEASE_TAG' does not match package.json version '$package_version'." >&2
             exit 1
           fi
@@ -131,7 +131,7 @@ jobs:
           TARBALL: ${{ steps.pack.outputs.tarball }}
         run: |
           set -euo pipefail
-          release_title="${RELEASE_TAG#v}"
+          release_title="$RELEASE_TAG"
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --title "$release_title"
