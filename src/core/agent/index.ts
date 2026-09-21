@@ -1,10 +1,12 @@
 import { claudeDriver } from "./drivers/claude";
 import { codexDriver } from "./drivers/codex";
+import { opencodeDriver } from "./drivers/opencode";
+import { piDriver } from "./drivers/pi";
 import type { AgentDriver, DriverId } from "./types";
 
 export * from "./types";
 
-const DRIVERS: AgentDriver[] = [claudeDriver, codexDriver];
+const DRIVERS: AgentDriver[] = [claudeDriver, codexDriver, opencodeDriver, piDriver];
 
 export async function detectDrivers(): Promise<AgentDriver[]> {
   const values = await Promise.all(

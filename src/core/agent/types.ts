@@ -1,4 +1,4 @@
-export const DRIVER_IDS = ["claude", "codex"] as const;
+export const DRIVER_IDS = ["claude", "codex", "opencode", "pi"] as const;
 
 export type DriverId = (typeof DRIVER_IDS)[number];
 

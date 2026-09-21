@@ -189,7 +189,7 @@ export async function promptForWorkflow(
     if (driver === undefined) return undefined;
     if (driver === null && command !== "review") {
       p.cancel(
-        "Install Claude Code or Codex, or choose Print the playbook to run it in another agent.",
+        "Install a supported coding agent, or choose Print the playbook to run it yourself.",
       );
       return undefined;
     }
