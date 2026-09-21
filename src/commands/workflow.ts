@@ -133,12 +133,12 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
   const driver = await resolveDriver(args.driver);
   if (!driver) {
     if (args.command === "review") {
-      ui.warning("No Claude Code or Codex installation found; showing deterministic review only.");
+      ui.warning("No supported coding agent found; showing deterministic review only.");
       ui.outro("Review complete");
       return;
     }
     throw new Error(
-      "No coding agent found. Install Claude Code or Codex, or run this command with --skill and paste the playbook into your agent.",
+      "No supported coding agent found. Install one or run this command with --skill and paste the playbook into your agent.",
     );
   }
   const prompt = await buildWorkflowPrompt();
