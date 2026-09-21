@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v-prefixed tag to release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Set up Node.js and npm
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Validate tag and package version
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must be a v-prefixed semantic version; got '$RELEASE_TAG'." >&2
+            exit 1
+          fi
+
+          package_version="$(node --print "require('./package.json').version")"
+          if [[ "$RELEASE_TAG" != "v$package_version" ]]; then
+            echo "Tag '$RELEASE_TAG' does not match package.json version '$package_version'." >&2
+            exit 1
+          fi
+
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "Release tag '$RELEASE_TAG' is not based on the main branch." >&2
+            exit 1
+          fi
+
+          if [[ "$package_version" == *-* ]]; then
+            echo "npm_tag=next" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke-test built CLI
+        run: node dist/bin.js --help
+
+      - name: Pack release artifact
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The build already ran above. Skipping lifecycle scripts here keeps
+          # npm's JSON output machine-readable even when a build tool is chatty.
+          tarball="$(npm pack --json --ignore-scripts | node --input-type=module -e \
+            "let input=''; for await (const chunk of process.stdin) input += chunk; console.log(JSON.parse(input)[0].filename)")"
+          test -f "$tarball"
+          sha256sum "$tarball" > "$tarball.sha256"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: Publish exact artifact to npm
+        shell: bash
+        env:
+          NPM_DIST_TAG: ${{ steps.release.outputs.npm_tag }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          set -euo pipefail
+
+          package_name="$(node --print "require('./package.json').name")"
+          package_version="$(node --print "require('./package.json').version")"
+          local_sha="$(sha1sum "$TARBALL" | cut -d ' ' -f 1)"
+
+          if published_sha="$(npm view "$package_name@$package_version" dist.shasum 2>/dev/null)"; then
+            if [[ "$published_sha" != "$local_sha" ]]; then
+              echo "npm already has $package_name@$package_version with different contents." >&2
+              exit 1
+            fi
+
+            echo "$package_name@$package_version is already published with the exact release artifact."
+          else
+            npm publish "$TARBALL" --access public --tag "$NPM_DIST_TAG"
+          fi
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$TARBALL" "$TARBALL.sha256" --clobber
+          elif [[ "$PRERELEASE" == "true" ]]; then
+            gh release create "$RELEASE_TAG" "$TARBALL" "$TARBALL.sha256" \
+              --verify-tag --generate-notes --title "$RELEASE_TAG" --prerelease
+          else
+            gh release create "$RELEASE_TAG" "$TARBALL" "$TARBALL.sha256" \
+              --verify-tag --generate-notes --title "$RELEASE_TAG"
+          fi
