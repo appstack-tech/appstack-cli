@@ -12,6 +12,7 @@ Appstack accounts, apps, campaigns, or dashboard resources.
 appstack integrate
 appstack review
 appstack upgrade
+appstack skill uninstall
 ```
 
 The CLI detects Swift/iOS, Kotlin/Android, React Native, Flutter, and Unity
@@ -48,6 +49,10 @@ When a direct command detects more than one supported coding agent, select one
 with `--agent claude`, `--agent codex`, `--agent opencode`, or `--agent pi`.
 The previous `--driver` spelling is retained as an alias.
 
+Agent detection checks the current process's `PATH`. The selected executable is
+started as the current operating-system user; the CLI does not install a skill
+into Codex, Claude Code, OpenCode, or Pi's user configuration.
+
 Pass integration keys through the environment or enter them in the masked TUI
 prompt. Keys are not accepted as command-line flags because those values can be
 retained in shell history or exposed in process listings:
@@ -76,6 +81,17 @@ cache. Set `APPSTACK_SKILL_UPDATES=off` to disable network refreshes, or
 `APPSTACK_SKILL_DIR=/path/to/appstack-sdk` to use a local development copy.
 `APPSTACK_CACHE_DIR` overrides the cache base directory for tests and managed
 environments.
+
+The default cache is scoped to the current operating-system user:
+
+- macOS: `~/Library/Caches/appstack/skills/appstack-sdk`
+- Linux: `${XDG_CACHE_HOME:-~/.cache}/appstack/skills/appstack-sdk`
+- Windows: `%LOCALAPPDATA%\\Appstack\\skills\\appstack-sdk`
+
+Run `appstack skill uninstall` to remove every downloaded Appstack skill release
+and its update state. This command removes only that Appstack-owned cache
+directory. It does not modify agent configuration or a development copy selected
+with `APPSTACK_SKILL_DIR`.
 
 ## Architecture
 

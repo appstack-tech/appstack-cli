@@ -4,6 +4,7 @@ import pc from "picocolors";
 import { FRAMEWORK_LABEL, VERSION, type FrameworkId } from "@/constants";
 import { DRIVER_IDS } from "@/core/agent";
 import { runWorkflow } from "@/commands/workflow";
+import { removeSkillCache } from "@/core/skill/cache";
 import { canLaunchTui, promptForWorkflow } from "@/tui";
 import { errorOutput, wantsJson, writeJson } from "@/output";
 import * as ui from "@/ui";
@@ -58,6 +59,9 @@ function printHelp(): void {
       row("integrate", "Install and configure the SDK"),
       row("review", "Audit an existing integration (read-only)"),
       row("upgrade", "Upgrade the SDK and migrate changed APIs"),
+      "",
+      pc.bold("Skill commands:"),
+      row("skill uninstall", "Remove downloaded Appstack skills"),
       "",
       pc.bold("Flags:"),
       row("--skill", "Print the agent playbook"),
@@ -151,6 +155,25 @@ export async function run(): Promise<void> {
           json: argv.json,
           to: argv.to,
         }),
+    )
+    .command(
+      "skill uninstall",
+      "Remove downloaded Appstack skills from this user's cache",
+      (y) =>
+        y.option("json", {
+          type: "boolean",
+          describe: "Print the result as JSON",
+        }),
+      async (argv) => {
+        const result = await removeSkillCache();
+        if (argv.json) {
+          writeJson(result);
+        } else if (result.removed) {
+          ui.success(`Removed downloaded Appstack skills from ${result.path}.`);
+        } else {
+          ui.info(`No downloaded Appstack skills found at ${result.path}.`);
+        }
+      },
     )
     .version(VERSION)
     .alias("v", "version")

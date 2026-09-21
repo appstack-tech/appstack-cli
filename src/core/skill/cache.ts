@@ -37,6 +37,28 @@ export function skillCacheRoot(options: ResolveSkillOptions): string {
   );
 }
 
+export interface RemoveSkillCacheResult {
+  path: string;
+  removed: boolean;
+}
+
+export async function removeSkillCache(
+  options: Pick<ResolveSkillOptions, "cacheRoot" | "env"> = {},
+): Promise<RemoveSkillCacheResult> {
+  const path = skillCacheRoot({
+    framework: "swift",
+    refresh: false,
+    ...options,
+  });
+  try {
+    await access(path);
+  } catch {
+    return { path, removed: false };
+  }
+  await rm(path, { recursive: true });
+  return { path, removed: true };
+}
+
 export async function readSkillState(root: string): Promise<SkillCacheState> {
   try {
     const value = JSON.parse(await readFile(join(root, "state.json"), "utf8")) as SkillCacheState;
