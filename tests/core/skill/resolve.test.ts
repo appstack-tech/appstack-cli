@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { strToU8, zipSync } from "fflate";
 import { resolveSkill } from "@/core/skill/resolve";
+import { removeSkillCache } from "@/core/skill/cache";
 import { REQUIRED_SKILL_FILES } from "@/core/skill/types";
 
 const RELEASE = "1.2.0";
@@ -264,4 +265,45 @@ test("development override bypasses cache and network", async () => {
   });
   assert.equal(result.source, "override");
   assert.match(result.body, /Override Kotlin/);
+});
+
+test("removes only the downloaded Appstack skill cache", async () => {
+  const root = cacheRoot();
+  await resolveSkill({
+    framework: "swift",
+    refresh: true,
+    cacheRoot: root,
+    fetch: githubFetch([]),
+    now: NOW,
+    env: {},
+  });
+  const unrelated = join(root, "unrelated.txt");
+  writeFileSync(unrelated, "keep me");
+
+  const removed = await removeSkillCache({ cacheRoot: root, env: {} });
+  assert.deepEqual(removed, {
+    path: join(root, "skills", "appstack-sdk"),
+    removed: true,
+  });
+  assert.equal(existsSync(removed.path), false);
+  assert.equal(existsSync(unrelated), true);
+
+  assert.deepEqual(await removeSkillCache({ cacheRoot: root, env: {} }), {
+    path: removed.path,
+    removed: false,
+  });
+});
+
+test("cache uninstall ignores APPSTACK_SKILL_DIR overrides", async () => {
+  const root = cacheRoot();
+  const override = mkdtempSync(join(tmpdir(), "appstack-skill-override-"));
+  writeFileSync(join(override, "SKILL.md"), "# User-managed skill\n");
+
+  const result = await removeSkillCache({
+    cacheRoot: root,
+    env: { APPSTACK_SKILL_DIR: override },
+  });
+
+  assert.equal(result.removed, false);
+  assert.equal(existsSync(join(override, "SKILL.md")), true);
 });

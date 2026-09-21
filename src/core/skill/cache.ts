@@ -16,6 +16,8 @@ export interface SkillSnapshot {
   files: Map<string, string>;
 }
 
+type SkillCacheOptions = Pick<ResolveSkillOptions, "cacheRoot" | "env">;
+
 export function defaultCacheRoot(
   env: NodeJS.ProcessEnv = process.env,
   platform = process.platform,
@@ -29,12 +31,30 @@ export function defaultCacheRoot(
   return join(env.XDG_CACHE_HOME ?? join(home, ".cache"), "appstack");
 }
 
-export function skillCacheRoot(options: ResolveSkillOptions): string {
+export function skillCacheRoot(options: SkillCacheOptions = {}): string {
   return join(
     options.cacheRoot ?? defaultCacheRoot(options.env),
     "skills",
     "appstack-sdk",
   );
+}
+
+export interface RemoveSkillCacheResult {
+  path: string;
+  removed: boolean;
+}
+
+export async function removeSkillCache(
+  options: SkillCacheOptions = {},
+): Promise<RemoveSkillCacheResult> {
+  const path = skillCacheRoot(options);
+  try {
+    await access(path);
+  } catch {
+    return { path, removed: false };
+  }
+  await rm(path, { recursive: true });
+  return { path, removed: true };
 }
 
 export async function readSkillState(root: string): Promise<SkillCacheState> {
