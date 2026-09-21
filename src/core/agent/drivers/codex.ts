@@ -2,7 +2,7 @@ import { readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentDriver, AgentOptions, AgentResult } from "../types";
-import { extractStatus, onPath, spawnLines } from "../spawn";
+import { extractStatus, onPath, spawnFailure, spawnLines } from "../spawn";
 
 export function codexArgs(options: AgentOptions, output: string): string[] {
   const readOnly = options.capabilities.filesystem === "read";
@@ -38,11 +38,17 @@ export const codexDriver: AgentDriver = {
       tmpdir(),
       `appstack-codex-${process.pid}-${Date.now()}.txt`,
     );
-    const code = await spawnLines({
+    const sensitiveValues = [
+      options.env?.APPSTACK_API_KEY ?? "",
+      options.env?.APPSTACK_IOS_API_KEY ?? "",
+      options.env?.APPSTACK_ANDROID_API_KEY ?? "",
+    ];
+    const execution = await spawnLines({
       bin: "codex",
       args: codexArgs(options, output),
       cwd: options.cwd,
       env: options.env,
+      sensitiveValues,
       onStdout(line) {
         try {
           const value = JSON.parse(line) as Record<string, unknown>;
@@ -63,6 +69,7 @@ export const codexDriver: AgentDriver = {
     } finally {
       await rm(output, { force: true }).catch(() => undefined);
     }
-    return { ok: code === 0, finalText };
+    const ok = execution.code === 0 && !execution.signal;
+    return { ok, finalText, ...(!ok ? { error: spawnFailure(execution) } : {}) };
   },
 };

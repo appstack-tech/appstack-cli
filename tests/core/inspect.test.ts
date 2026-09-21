@@ -108,3 +108,75 @@ test("resolves a local Unity package version", () => {
   assert.equal(result.installed, true);
   assert.equal(result.installedVersion, "1.2.0");
 });
+
+test("uses the exact npm lockfile version for React Native", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-npm-"));
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({ dependencies: { "react-native-appstack-sdk": "^2.4.0" } }),
+  );
+  writeFileSync(
+    join(root, "package-lock.json"),
+    JSON.stringify({
+      lockfileVersion: 3,
+      packages: { "node_modules/react-native-appstack-sdk": { version: "2.6.1" } },
+    }),
+  );
+  const result = inspectProject(reactNativeProject(root));
+  assert.equal(result.installedVersion, "2.6.1");
+  assert.equal(result.installedVersionSource, "lockfile");
+});
+
+test("uses Yarn and pnpm lockfile versions for React Native", () => {
+  const yarnRoot = mkdtempSync(join(tmpdir(), "appstack-inspect-yarn-"));
+  writeFileSync(
+    join(yarnRoot, "package.json"),
+    JSON.stringify({
+      packageManager: "yarn@1.22.0",
+      dependencies: { "react-native-appstack-sdk": "^2.4.0" },
+    }),
+  );
+  writeFileSync(
+    join(yarnRoot, "yarn.lock"),
+    'react-native-appstack-sdk@^2.4.0:\n  version "2.6.2"\n',
+  );
+  const yarn = inspectProject(reactNativeProject(yarnRoot));
+  assert.equal(yarn.installedVersion, "2.6.2");
+  assert.equal(yarn.installedVersionSource, "lockfile");
+
+  const pnpmRoot = mkdtempSync(join(tmpdir(), "appstack-inspect-pnpm-"));
+  writeFileSync(
+    join(pnpmRoot, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@9.0.0",
+      dependencies: { "react-native-appstack-sdk": "^2.4.0" },
+    }),
+  );
+  writeFileSync(
+    join(pnpmRoot, "pnpm-lock.yaml"),
+    "packages:\n  react-native-appstack-sdk@2.6.3:\n    resolution: {}\n",
+  );
+  const pnpm = inspectProject(reactNativeProject(pnpmRoot));
+  assert.equal(pnpm.installedVersion, "2.6.3");
+  assert.equal(pnpm.installedVersionSource, "lockfile");
+});
+
+test("finds a workspace lockfile above a React Native app", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "appstack-inspect-workspace-"));
+  const app = join(workspace, "apps", "mobile");
+  mkdirSync(app, { recursive: true });
+  writeFileSync(
+    join(app, "package.json"),
+    JSON.stringify({ dependencies: { "react-native-appstack-sdk": "^2.4.0" } }),
+  );
+  writeFileSync(
+    join(workspace, "package-lock.json"),
+    JSON.stringify({
+      lockfileVersion: 3,
+      packages: { "node_modules/react-native-appstack-sdk": { version: "2.6.4" } },
+    }),
+  );
+  const result = inspectProject(reactNativeProject(app));
+  assert.equal(result.installedVersion, "2.6.4");
+  assert.equal(result.installedVersionSource, "lockfile");
+});

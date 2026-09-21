@@ -14,6 +14,7 @@ function inspection(overrides: Partial<Inspection> = {}): Inspection {
     },
     installed: true,
     installedVersion: "2.6.0",
+    installedVersionSource: "lockfile",
     configureCount: 1,
     eventCallCount: 0,
     customEventNames: [],
@@ -67,4 +68,14 @@ test("upgrade accepts the verified target version", () => {
     targetVersion: "2.6.0",
   });
   assert.deepEqual(result, { ok: true, errors: [] });
+});
+
+test("React Native upgrade requires a lockfile-resolved version", () => {
+  const result = verifyWorkflowPostconditions({
+    workflow: "upgrade",
+    after: inspection({ installedVersionSource: "manifest" }),
+    targetVersion: "2.6.0",
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join(" "), /not resolved from a lockfile/);
 });

@@ -1,5 +1,12 @@
 import type { AgentDriver, AgentOptions, AgentResult } from "../types";
-import { extractStatus, onPath, spawnLines } from "../spawn";
+import { extractStatus, onPath, spawnFailure, spawnLines } from "../spawn";
+
+export function claudeSucceeded(
+  resultOk: boolean | undefined,
+  execution: { code: number | null; signal: NodeJS.Signals | null },
+): boolean {
+  return (resultOk ?? execution.code === 0) && execution.code === 0 && !execution.signal;
+}
 
 function tools(options: AgentOptions): string[] {
   const result = ["Read", "Glob", "Grep", "Bash", "WebFetch", "WebSearch"];
@@ -29,12 +36,19 @@ export const claudeDriver: AgentDriver = {
   detect: () => onPath("claude"),
   async run(options): Promise<AgentResult> {
     let finalText: string | undefined;
-    let ok = false;
-    const code = await spawnLines({
+    let resultOk: boolean | undefined;
+    let resultError: string | undefined;
+    const sensitiveValues = [
+      options.env?.APPSTACK_API_KEY ?? "",
+      options.env?.APPSTACK_IOS_API_KEY ?? "",
+      options.env?.APPSTACK_ANDROID_API_KEY ?? "",
+    ];
+    const execution = await spawnLines({
       bin: "claude",
       args: claudeArgs(options),
       cwd: options.cwd,
       env: options.env,
+      sensitiveValues,
       onStdout(line) {
         try {
           const message = JSON.parse(line) as Record<string, unknown>;
@@ -48,13 +62,23 @@ export const claudeDriver: AgentDriver = {
           }
           if (message.type === "result") {
             if (typeof message.result === "string") finalText = message.result;
-            ok = message.subtype === "success" && message.is_error !== true;
+            resultOk = message.subtype === "success" && message.is_error !== true;
+            if (!resultOk) {
+              resultError = typeof message.result === "string"
+                ? message.result
+                : `Claude returned ${String(message.subtype ?? "an error")}.`;
+            }
           }
         } catch {
-          // Claude's stream is best-effort UI data; the exit code remains authoritative.
+          // Malformed progress events are ignored; a valid result event remains authoritative.
         }
       },
     });
-    return { ok: ok || code === 0, finalText };
+    const ok = claudeSucceeded(resultOk, execution);
+    return {
+      ok,
+      finalText,
+      ...(!ok ? { error: spawnFailure(execution, resultError, sensitiveValues) } : {}),
+    };
   },
 };

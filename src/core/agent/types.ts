@@ -17,6 +17,7 @@ export interface AgentOptions {
 export interface AgentResult {
   ok: boolean;
   finalText?: string;
+  error?: string;
 }
 
 export interface AgentDriver {

@@ -42,14 +42,17 @@ appstack integrate --skill
 appstack upgrade --to 2.6.0 --dry-run
 ```
 
-For cross-platform integrations, keys can be passed as flags or environment
-variables:
+Pass integration keys through the environment or enter them in the masked TUI
+prompt. Keys are not accepted as command-line flags because those values can be
+retained in shell history or exposed in process listings:
 
 ```bash
 APPSTACK_IOS_API_KEY=... APPSTACK_ANDROID_API_KEY=... appstack integrate
 ```
 
 The CLI never creates keys and instructs the agent not to print key values.
+Claude or Codex inherits the caller's environment, with the relevant Appstack
+keys added for the integration workflow.
 
 ## Skill updates
 
