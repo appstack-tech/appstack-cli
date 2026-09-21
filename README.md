@@ -20,7 +20,8 @@ headlessly with the official framework-specific Appstack skill.
 
 Run `appstack` in an interactive terminal to open the guided TUI. It detects
 apps, lets you choose a workflow and execution mode, masks API-key entry, and
-asks for confirmation before an integration or upgrade can change files.
+asks which coding agent to use when several are installed. It also asks for
+confirmation before an integration or upgrade can change files.
 The interface follows Appstack's monochrome identity using the terminal's native
 foreground and background, with color reserved for semantic status feedback.
 
@@ -40,7 +41,12 @@ appstack review --json
 appstack review --verbose
 appstack integrate --skill
 appstack upgrade --to 2.6.0 --dry-run
+appstack integrate --agent codex
 ```
+
+When a direct command detects more than one supported coding agent, select one
+with `--agent claude` or `--agent codex`. The previous `--driver` spelling is
+retained as an alias.
 
 Pass integration keys through the environment or enter them in the masked TUI
 prompt. Keys are not accepted as command-line flags because those values can be
