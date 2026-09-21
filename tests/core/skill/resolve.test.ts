@@ -10,11 +10,18 @@ import { REQUIRED_SKILL_FILES } from "@/core/skill/types";
 
 const RELEASE = "1.2.0";
 const NOW = Date.parse("2026-09-01T10:00:00Z");
+const DAY = 24 * 60 * 60 * 1000;
 const ASSET_URL =
   `https://github.com/appstack-tech/appstack-skills/releases/download/${RELEASE}/appstack-skills.zip`;
 
 function cacheRoot(): string {
   return mkdtempSync(join(tmpdir(), "appstack-skill-cache-"));
+}
+
+function offlineFetch(): typeof globalThis.fetch {
+  return (async () => {
+    throw new Error("offline");
+  }) as typeof globalThis.fetch;
 }
 
 function skillArchive(missing?: string): Uint8Array {
@@ -112,62 +119,135 @@ test("downloads the latest skill release and reuses the fresh cache", async () =
   assert.equal(fetchedAgain, false);
 });
 
-test("invalid, incompatible, and incomplete releases fall back safely", async () => {
-  const invalidDigest = await resolveSkill({
-    framework: "swift",
-    refresh: true,
-    cacheRoot: cacheRoot(),
-    fetch: githubFetch([], { digest: `sha256:${"0".repeat(64)}` }),
-    now: NOW,
-    env: {},
-  });
-  assert.equal(invalidDigest.source, "bundled");
+test("invalid, incompatible, and incomplete releases fail explicitly", async () => {
+  await assert.rejects(
+    resolveSkill({
+      framework: "swift",
+      refresh: true,
+      cacheRoot: cacheRoot(),
+      fetch: githubFetch([], { digest: `sha256:${"0".repeat(64)}` }),
+      now: NOW,
+      env: {},
+    }),
+    /skill is not available yet.*failed its SHA-256 check/,
+  );
 
-  const incompatible = await resolveSkill({
-    framework: "swift",
-    refresh: true,
-    cacheRoot: cacheRoot(),
-    fetch: githubFetch([], { release: "2.0.0" }),
-    now: NOW,
-    env: {},
-  });
-  assert.equal(incompatible.source, "bundled");
+  await assert.rejects(
+    resolveSkill({
+      framework: "swift",
+      refresh: true,
+      cacheRoot: cacheRoot(),
+      fetch: githubFetch([], { release: "2.0.0" }),
+      now: NOW,
+      env: {},
+    }),
+    /skill is not available yet.*not a supported 1\.x version/,
+  );
 
-  const incomplete = await resolveSkill({
-    framework: "swift",
-    refresh: true,
-    cacheRoot: cacheRoot(),
-    fetch: githubFetch([], { missing: "references/swift.md" }),
-    now: NOW,
-    env: {},
-  });
-  assert.equal(incomplete.source, "bundled");
+  await assert.rejects(
+    resolveSkill({
+      framework: "swift",
+      refresh: true,
+      cacheRoot: cacheRoot(),
+      fetch: githubFetch([], { missing: "references/swift.md" }),
+      now: NOW,
+      env: {},
+    }),
+    /skill is not available yet.*missing references\/swift\.md/,
+  );
 });
 
-test("offline updates fall back without failing", async () => {
-  const result = await resolveSkill({
-    framework: "swift",
-    refresh: true,
-    cacheRoot: cacheRoot(),
-    fetch: (async () => {
-      throw new Error("offline");
-    }) as typeof globalThis.fetch,
-    now: NOW,
-    env: {},
-  });
-  assert.equal(result.source, "bundled");
+test("a cold cache with no network fails with an actionable error", async () => {
+  await assert.rejects(
+    resolveSkill({
+      framework: "swift",
+      refresh: true,
+      cacheRoot: cacheRoot(),
+      fetch: offlineFetch(),
+      now: NOW,
+      env: {},
+    }),
+    /skill is not available yet.*offline.*APPSTACK_SKILL_DIR/,
+  );
 });
 
-test("dry resolution does not create skill cache files", async () => {
+test("a failed refresh keeps the last valid cached release", async () => {
   const root = cacheRoot();
-  const result = await resolveSkill({
-    framework: "flutter",
-    refresh: false,
+  const first = await resolveSkill({
+    framework: "swift",
+    refresh: true,
     cacheRoot: root,
+    fetch: githubFetch([]),
+    now: NOW,
     env: {},
   });
-  assert.equal(result.source, "bundled");
+  assert.equal(first.source, "cache");
+
+  const second = await resolveSkill({
+    framework: "swift",
+    refresh: true,
+    cacheRoot: root,
+    fetch: offlineFetch(),
+    now: NOW + 2 * DAY,
+    env: {},
+  });
+  assert.equal(second.source, "cache");
+  assert.equal(second.release, RELEASE);
+  assert.match(second.body, /Released Appstack SDK/);
+});
+
+test("refresh-free resolution neither fetches nor writes cache files", async () => {
+  const root = cacheRoot();
+  await assert.rejects(
+    resolveSkill({
+      framework: "flutter",
+      refresh: false,
+      cacheRoot: root,
+      fetch: offlineFetch(),
+      env: {},
+    }),
+    /skill is not available yet.*does not update skills/,
+  );
   assert.equal(existsSync(join(root, "skills")), false);
+});
+
+test("disabled updates use the cache without touching the network", async () => {
+  const root = cacheRoot();
+  await resolveSkill({
+    framework: "swift",
+    refresh: true,
+    cacheRoot: root,
+    fetch: githubFetch([]),
+    now: NOW,
+    env: {},
+  });
+
+  let fetched = false;
+  const cached = await resolveSkill({
+    framework: "swift",
+    refresh: true,
+    cacheRoot: root,
+    fetch: (async () => {
+      fetched = true;
+      throw new Error("should not fetch");
+    }) as typeof globalThis.fetch,
+    now: NOW + 2 * DAY,
+    env: { APPSTACK_SKILL_UPDATES: "off" },
+  });
+  assert.equal(cached.source, "cache");
+  assert.equal(fetched, false);
+
+  await assert.rejects(
+    resolveSkill({
+      framework: "swift",
+      refresh: true,
+      cacheRoot: cacheRoot(),
+      fetch: offlineFetch(),
+      now: NOW,
+      env: { APPSTACK_SKILL_UPDATES: "off" },
+    }),
+    /skill is not available yet.*Skill updates are off/,
+  );
 });
 
 test("development override bypasses cache and network", async () => {

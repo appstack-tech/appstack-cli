@@ -1,13 +1,6 @@
 import { join } from "node:path";
 import type { FrameworkId } from "@/constants";
-import { packageRoot, readText } from "@/util";
-
-export function loadSkill(framework: FrameworkId): string {
-  return loadSkillFromRoot(
-    join(packageRoot(), "skills", "appstack-sdk"),
-    framework,
-  );
-}
+import { readText } from "@/util";
 
 export function loadSkillFromRoot(
   root: string,

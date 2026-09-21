@@ -17,7 +17,7 @@ export interface SkillCacheState {
 
 export interface ResolvedSkill {
   body: string;
-  source: "bundled" | "cache" | "override";
+  source: "cache" | "override";
   release?: string;
 }
 
@@ -25,7 +25,6 @@ export interface ResolveSkillOptions {
   framework: FrameworkId;
   refresh: boolean;
   cacheRoot?: string;
-  bundledRoot?: string;
   env?: NodeJS.ProcessEnv;
   fetch?: typeof globalThis.fetch;
   now?: number;

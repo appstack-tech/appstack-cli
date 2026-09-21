@@ -76,24 +76,26 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     return;
   }
 
-  const resolvedSkill = await resolveSkill({
-    framework: project.framework,
-    refresh: !args.dryRun,
-  });
-
-  const prompt = buildPrompt({
-    workflow: args.command,
-    inspection,
-    latest,
-    skill: resolvedSkill.body,
-    apiKeys: {
-      generic: Boolean(keyValues.generic),
-      ios: Boolean(keyValues.ios),
-      android: Boolean(keyValues.android),
-    },
-    copyMode: args.skill,
-    verbose: args.verbose,
-  });
+  let prompt: string | undefined;
+  if (args.skill || !args.dryRun) {
+    const resolvedSkill = await resolveSkill({
+      framework: project.framework,
+      refresh: !args.dryRun,
+    });
+    prompt = buildPrompt({
+      workflow: args.command,
+      inspection,
+      latest,
+      skill: resolvedSkill.body,
+      apiKeys: {
+        generic: Boolean(keyValues.generic),
+        ios: Boolean(keyValues.ios),
+        android: Boolean(keyValues.android),
+      },
+      copyMode: args.skill,
+      verbose: args.verbose,
+    });
+  }
 
   if (args.skill) {
     process.stdout.write(`${prompt}\n`);
@@ -124,6 +126,9 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     ui.info("Dry run: no agent started and no files changed.");
     ui.outro("Inspection complete");
     return;
+  }
+  if (prompt === undefined) {
+    throw new Error("Internal error: the workflow prompt was not built.");
   }
 
   const driver = await resolveDriver(args.driver);
