@@ -47,7 +47,10 @@ function printInspection(inspection: Inspection): void {
   }
 }
 
-async function upgradeTarget(args: WorkflowArgs): Promise<LatestVersion | undefined> {
+async function upgradeTarget(
+  args: WorkflowArgs,
+  framework: FrameworkId,
+): Promise<LatestVersion | undefined> {
   if (args.command !== "upgrade") return undefined;
   if (args.to && args.to !== "latest") {
     if (!isValidVersion(args.to)) {
@@ -55,26 +58,26 @@ async function upgradeTarget(args: WorkflowArgs): Promise<LatestVersion | undefi
     }
     return { version: args.to, source: "--to" };
   }
-  return resolveLatestVersion(args.framework!);
+  return resolveLatestVersion(framework);
 }
 
 export async function runWorkflow(args: WorkflowArgs): Promise<void> {
   const root = resolve(args.installDir ?? process.cwd());
   const project = await resolveProject(root, args.framework);
-  args.framework = project.framework;
   const inspection = inspectProject(project);
-  const latest = await upgradeTarget(args);
+
+  if (args.json) {
+    writeJson({ inspection });
+    return;
+  }
+
+  const latest = await upgradeTarget(args, project.framework);
 
   const keyValues = {
     generic: args.apiKey ?? process.env.APPSTACK_API_KEY,
     ios: args.iosApiKey ?? process.env.APPSTACK_IOS_API_KEY,
     android: args.androidApiKey ?? process.env.APPSTACK_ANDROID_API_KEY,
   };
-
-  if (args.json) {
-    writeJson({ inspection, ...(latest ? { latest } : {}) });
-    return;
-  }
 
   if (!args.skill) {
     ui.intro(`Appstack ${args.command}`);
@@ -159,8 +162,8 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
       },
       capabilities:
         args.command === "review"
-          ? { filesystem: "read", network: true, shell: "read-only" }
-          : { filesystem: "write", network: true, shell: "unrestricted" },
+          ? { filesystem: "read", network: true }
+          : { filesystem: "write", network: true },
       onStatus: ui.status,
     });
   } catch (error) {

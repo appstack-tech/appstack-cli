@@ -74,6 +74,13 @@ interface DetectedVersion {
   source?: VersionSource;
 }
 
+function detectedVersionFrom(
+  version: string | undefined,
+  source: VersionSource,
+): DetectedVersion {
+  return version ? { version, source } : {};
+}
+
 function dependencyVersion(path: string, name: string): string | undefined {
   const json = readJson<PackageJson>(path);
   return stableVersion(json?.dependencies?.[name] ?? json?.devDependencies?.[name]);
@@ -264,15 +271,15 @@ function dependencyInstalled(project: DetectedProject): boolean {
 function detectedVersion(project: DetectedProject): DetectedVersion {
   switch (project.framework) {
     case "swift":
-      return { version: swiftVersion(project.path), source: "resolved" };
+      return detectedVersionFrom(swiftVersion(project.path), "resolved");
     case "kotlin":
-      return { version: kotlinVersion(project.path), source: "manifest" };
+      return detectedVersionFrom(kotlinVersion(project.path), "manifest");
     case "react-native":
       return reactNativeVersion(project.path);
     case "flutter":
-      return { version: flutterVersion(project.path), source: "resolved" };
+      return detectedVersionFrom(flutterVersion(project.path), "resolved");
     case "unity":
-      return { version: unityVersion(project.path), source: "manifest" };
+      return detectedVersionFrom(unityVersion(project.path), "manifest");
   }
 }
 

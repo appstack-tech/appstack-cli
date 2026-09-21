@@ -61,9 +61,9 @@ retained in shell history or exposed in process listings:
 APPSTACK_IOS_API_KEY=... APPSTACK_ANDROID_API_KEY=... appstack integrate
 ```
 
-The CLI never creates keys and instructs the agent not to print key values.
-Claude or Codex inherits the caller's environment, with the relevant Appstack
-keys added for the integration workflow.
+The CLI never creates keys and instructs the agent not to print key values. The
+selected coding agent inherits the caller's environment, with the relevant
+Appstack keys added for the integration workflow.
 
 ## Skill updates
 

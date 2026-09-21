@@ -5,7 +5,6 @@ export type DriverId = (typeof DRIVER_IDS)[number];
 export interface AgentCapabilities {
   filesystem: "read" | "write";
   network: boolean;
-  shell: "read-only" | "unrestricted";
 }
 
 export interface AgentOptions {

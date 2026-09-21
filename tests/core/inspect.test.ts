@@ -56,6 +56,23 @@ test("reports a missing dependency and initialization", () => {
     result.findings.map((item) => item.code),
     ["sdk-not-installed", "configure-missing"],
   );
+  assert.equal(result.installedVersion, undefined);
+  assert.equal(result.installedVersionSource, undefined);
+});
+
+test("omits the version source when a platform version is not detected", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-empty-swift-"));
+
+  const result = inspectProject({
+    framework: "swift",
+    frameworkLabel: "Swift (iOS)",
+    path: root,
+    relativePath: ".",
+    name: "fixture",
+  });
+
+  assert.equal(result.installedVersion, undefined);
+  assert.equal(result.installedVersionSource, undefined);
 });
 
 test("ignores commented-out configure calls", () => {
