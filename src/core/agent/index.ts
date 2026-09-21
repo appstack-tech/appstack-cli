@@ -13,9 +13,18 @@ export async function detectDrivers(): Promise<AgentDriver[]> {
   return values.filter((value): value is AgentDriver => value !== null);
 }
 
-export async function resolveDriver(requested?: DriverId): Promise<AgentDriver | undefined> {
-  const drivers = await detectDrivers();
-  if (!requested) return drivers[0];
+export function selectDriver(
+  drivers: AgentDriver[],
+  requested?: DriverId,
+): AgentDriver | undefined {
+  if (!requested) {
+    if (drivers.length > 1) {
+      throw new Error(
+        `Multiple coding agents detected: ${drivers.map((driver) => driver.displayName).join(", ")}. Select one with --agent <name>.`,
+      );
+    }
+    return drivers[0];
+  }
   const match = drivers.find((driver) => driver.id === requested);
   if (!match) {
     throw new Error(
@@ -23,4 +32,8 @@ export async function resolveDriver(requested?: DriverId): Promise<AgentDriver |
     );
   }
   return match;
+}
+
+export async function resolveDriver(requested?: DriverId): Promise<AgentDriver | undefined> {
+  return selectDriver(await detectDrivers(), requested);
 }

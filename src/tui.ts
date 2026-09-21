@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import pc from "picocolors";
 import type { WorkflowArgs } from "@/commands/workflow";
 import { VERSION, type FrameworkId } from "@/constants";
+import { detectDrivers, type AgentDriver, type DriverId } from "@/core/agent";
 import { scanProjects, type DetectedProject } from "@/core/project/scan";
 import type { WorkflowId } from "@/core/agent/prompt";
 import { configurePromptTheme, theme } from "@/theme";
@@ -79,6 +80,30 @@ async function chooseMode(): Promise<RunMode | undefined> {
     ],
   });
   return cancelled(mode) ? undefined : mode;
+}
+
+async function chooseAgent(): Promise<DriverId | null | undefined> {
+  const spinner = p.spinner();
+  spinner.start("Detecting coding agents");
+  const drivers = await detectDrivers();
+  if (!drivers.length) {
+    spinner.stop("No supported coding agent found", 1);
+    return null;
+  }
+  if (drivers.length === 1) {
+    spinner.stop(`Found ${drivers[0]!.displayName}`);
+    return drivers[0]!.id;
+  }
+  spinner.stop(`Found ${drivers.length} coding agents`);
+
+  const selected = await p.select<DriverId>({
+    message: "Which coding agent should Appstack use?",
+    options: drivers.map((driver: AgentDriver) => ({
+      value: driver.id,
+      label: driver.displayName,
+    })),
+  });
+  return cancelled(selected) ? undefined : selected;
 }
 
 async function readSecret(message: string): Promise<string | undefined> {
@@ -158,6 +183,18 @@ export async function promptForWorkflow(
     dryRun: mode === "dry-run",
     skill: mode === "skill",
   };
+
+  if (mode === "run") {
+    const driver = await chooseAgent();
+    if (driver === undefined) return undefined;
+    if (driver === null && command !== "review") {
+      p.cancel(
+        "Install Claude Code or Codex, or choose Print the playbook to run it in another agent.",
+      );
+      return undefined;
+    }
+    if (driver) args.driver = driver;
+  }
 
   if (
     command === "integrate" &&
