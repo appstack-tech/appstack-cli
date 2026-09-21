@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import pc from "picocolors";
@@ -100,12 +99,7 @@ export async function run(): Promise<void> {
     .command(
       "integrate",
       "Install and configure the Appstack SDK",
-      (y) =>
-        workflowOptions(y).options({
-          "api-key": { type: "string", describe: "API key for a single-platform app" },
-          "ios-api-key": { type: "string", describe: "iOS API key for a cross-platform app" },
-          "android-api-key": { type: "string", describe: "Android API key for a cross-platform app" },
-        }),
+      workflowOptions,
       (argv) =>
         runWorkflow({
           command: "integrate",
@@ -115,9 +109,6 @@ export async function run(): Promise<void> {
           skill: argv.skill,
           dryRun: argv.dryRun,
           json: argv.json,
-          apiKey: argv.apiKey,
-          iosApiKey: argv.iosApiKey,
-          androidApiKey: argv.androidApiKey,
         }),
     )
     .command(

@@ -1,5 +1,5 @@
-import { isAbsolute, join, relative, resolve } from "node:path";
-import { readFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import fg from "fast-glob";
 import type { FrameworkId } from "@/constants";
 import type { DetectedProject } from "@/core/project/scan";
@@ -54,6 +54,7 @@ export interface Inspection {
   project: DetectedProject;
   installed: boolean;
   installedVersion?: string;
+  installedVersionSource?: VersionSource;
   configureCount: number;
   eventCallCount: number;
   customEventNames: string[];
@@ -63,11 +64,92 @@ export interface Inspection {
 interface PackageJson {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  packageManager?: string;
+}
+
+type VersionSource = "lockfile" | "manifest" | "resolved";
+
+interface DetectedVersion {
+  version?: string;
+  source?: VersionSource;
 }
 
 function dependencyVersion(path: string, name: string): string | undefined {
   const json = readJson<PackageJson>(path);
   return stableVersion(json?.dependencies?.[name] ?? json?.devDependencies?.[name]);
+}
+
+function npmLockedVersion(root: string, name: string): string | undefined {
+  for (const filename of ["npm-shrinkwrap.json", "package-lock.json"]) {
+    const lock = readJson<{
+      packages?: Record<string, { version?: string }>;
+      dependencies?: Record<string, { version?: string }>;
+    }>(join(root, filename));
+    const value =
+      lock?.packages?.[`node_modules/${name}`]?.version ??
+      lock?.dependencies?.[name]?.version;
+    if (value) return stableVersion(value);
+  }
+  return undefined;
+}
+
+function yarnLockedVersion(root: string, name: string): string | undefined {
+  const text = readText(join(root, "yarn.lock"));
+  if (!text) return undefined;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const block = text.match(
+    new RegExp(`^["']?${escaped}@[^\\n]+["']?:\\n((?:[ \\t]+[^\\n]*\\n?)*)`, "m"),
+  )?.[1];
+  return stableVersion(block?.match(/^\s*version(?:\s*:|\s+)\s*["']?([^\s"']+)/m)?.[1]);
+}
+
+function pnpmLockedVersion(root: string, name: string): string | undefined {
+  const text = readText(join(root, "pnpm-lock.yaml"));
+  if (!text) return undefined;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const keyed = text.match(
+    new RegExp(`^\\s{2}(?:/["']?)?${escaped}@([^:\\s"']+)["']?:`, "m"),
+  )?.[1] ?? text.match(
+    new RegExp(`^\\s{2}/["']?${escaped}/([^:\\s"']+)["']?:`, "m"),
+  )?.[1];
+  const importer = text.match(
+    new RegExp(
+      `^\\s{4}["']?${escaped}["']?:\\s*\\n[\\s\\S]{0,300}?^\\s{6,}version:\\s*["']?([^\\s"']+)`,
+      "m",
+    ),
+  )?.[1];
+  return stableVersion(importer ?? keyed);
+}
+
+function lockSearchRoots(root: string): string[] {
+  const roots: string[] = [];
+  let current = root;
+  for (let depth = 0; depth < 8; depth++) {
+    roots.push(current);
+    if (existsSync(join(current, ".git"))) break;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return roots;
+}
+
+function reactNativeVersion(root: string): DetectedVersion {
+  const name = "react-native-appstack-sdk";
+  const packageManager = readJson<PackageJson>(join(root, "package.json"))?.packageManager;
+  const resolvers = packageManager?.startsWith("pnpm@")
+    ? [pnpmLockedVersion, npmLockedVersion, yarnLockedVersion]
+    : packageManager?.startsWith("yarn@")
+      ? [yarnLockedVersion, npmLockedVersion, pnpmLockedVersion]
+      : [npmLockedVersion, yarnLockedVersion, pnpmLockedVersion];
+  for (const lockRoot of lockSearchRoots(root)) {
+    for (const resolver of resolvers) {
+      const version = resolver(lockRoot, name);
+      if (version) return { version, source: "lockfile" };
+    }
+  }
+  const version = dependencyVersion(join(root, "package.json"), name);
+  return { version, ...(version ? { source: "manifest" as const } : {}) };
 }
 
 function swiftVersion(root: string): string | undefined {
@@ -179,19 +261,23 @@ function dependencyInstalled(project: DetectedProject): boolean {
   }
 }
 
-export function installedVersion(project: DetectedProject): string | undefined {
+function detectedVersion(project: DetectedProject): DetectedVersion {
   switch (project.framework) {
     case "swift":
-      return swiftVersion(project.path);
+      return { version: swiftVersion(project.path), source: "resolved" };
     case "kotlin":
-      return kotlinVersion(project.path);
+      return { version: kotlinVersion(project.path), source: "manifest" };
     case "react-native":
-      return dependencyVersion(join(project.path, "package.json"), "react-native-appstack-sdk");
+      return reactNativeVersion(project.path);
     case "flutter":
-      return flutterVersion(project.path);
+      return { version: flutterVersion(project.path), source: "resolved" };
     case "unity":
-      return unityVersion(project.path);
+      return { version: unityVersion(project.path), source: "manifest" };
   }
+}
+
+export function installedVersion(project: DetectedProject): string | undefined {
+  return detectedVersion(project).version;
 }
 
 function sourceFiles(project: DetectedProject): string[] {
@@ -208,7 +294,8 @@ function uniqueFiles(root: string, files: string[]): string[] {
 }
 
 export function inspectProject(project: DetectedProject): Inspection {
-  const version = installedVersion(project);
+  const detected = detectedVersion(project);
+  const version = detected.version;
   const files = sourceFiles(project);
   let configureCount = 0;
   let eventCallCount = 0;
@@ -324,6 +411,7 @@ export function inspectProject(project: DetectedProject): Inspection {
     project,
     installed,
     installedVersion: version,
+    installedVersionSource: detected.source,
     configureCount,
     eventCallCount,
     customEventNames: [...customNames].sort(),

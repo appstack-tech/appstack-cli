@@ -76,13 +76,34 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     return;
   }
 
-  let prompt: string | undefined;
-  if (args.skill || !args.dryRun) {
+  if (!args.skill) {
+    ui.intro(`Appstack ${args.command}`);
+    printInspection(inspection);
+  }
+
+  if (args.command === "upgrade") {
+    if (!inspection.installedVersion) {
+      throw new Error("No installed Appstack SDK version was detected. Run `appstack integrate` instead.");
+    }
+    if (!latest?.version) {
+      throw new Error(
+        `Could not resolve the latest version from ${latest?.source ?? "the registry"}: ${latest?.error ?? "unknown error"}. Pass --to <version> to continue explicitly.`,
+      );
+    }
+    if (compareVersions(inspection.installedVersion, latest.version) >= 0 && !args.skill) {
+      ui.success(`Already on Appstack SDK ${inspection.installedVersion}.`);
+      ui.outro("Nothing to upgrade");
+      return;
+    }
+    if (!args.skill) ui.info(`Upgrade target ${latest.version} · ${latest.source}`);
+  }
+
+  const buildWorkflowPrompt = async (): Promise<string> => {
     const resolvedSkill = await resolveSkill({
       framework: project.framework,
       refresh: !args.dryRun,
     });
-    prompt = buildPrompt({
+    return buildPrompt({
       workflow: args.command,
       inspection,
       latest,
@@ -95,40 +116,18 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
       copyMode: args.skill,
       verbose: args.verbose,
     });
-  }
+  };
 
   if (args.skill) {
+    const prompt = await buildWorkflowPrompt();
     process.stdout.write(`${prompt}\n`);
     return;
-  }
-
-  ui.intro(`Appstack ${args.command}`);
-  printInspection(inspection);
-
-  if (args.command === "upgrade") {
-    if (!inspection.installedVersion) {
-      throw new Error("No installed Appstack SDK version was detected. Run `appstack integrate` instead.");
-    }
-    if (!latest?.version) {
-      throw new Error(
-        `Could not resolve the latest version from ${latest?.source ?? "the registry"}: ${latest?.error ?? "unknown error"}. Pass --to <version> to continue explicitly.`,
-      );
-    }
-    if (compareVersions(inspection.installedVersion, latest.version) >= 0) {
-      ui.success(`Already on Appstack SDK ${inspection.installedVersion}.`);
-      ui.outro("Nothing to upgrade");
-      return;
-    }
-    ui.info(`Upgrade target ${latest.version} · ${latest.source}`);
   }
 
   if (args.dryRun) {
     ui.info("Dry run: no agent started and no files changed.");
     ui.outro("Inspection complete");
     return;
-  }
-  if (prompt === undefined) {
-    throw new Error("Internal error: the workflow prompt was not built.");
   }
 
   const driver = await resolveDriver(args.driver);
@@ -142,6 +141,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
       "No coding agent found. Install Claude Code or Codex, or run this command with --skill and paste the playbook into your agent.",
     );
   }
+  const prompt = await buildWorkflowPrompt();
 
   ui.status(
     `Running ${driver.displayName} in ${args.command === "review" ? "read-only" : "read-write"} mode`,
@@ -171,7 +171,11 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     result.ok ? `${driver.displayName} completed` : `${driver.displayName} stopped`,
     result.ok,
   );
-  if (!result.ok) throw new Error(`${driver.displayName} stopped before finishing.`);
+  if (!result.ok) {
+    throw new Error(
+      `${driver.displayName} stopped before finishing.${result.error ? `\n${result.error}` : ""}`,
+    );
+  }
 
   if (result.finalText) ui.report(result.finalText);
   if (args.command !== "review") {

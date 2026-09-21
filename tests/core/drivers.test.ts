@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { claudeArgs } from "@/core/agent/drivers/claude";
+import { claudeArgs, claudeSucceeded } from "@/core/agent/drivers/claude";
 import { codexArgs } from "@/core/agent/drivers/codex";
 import type { AgentOptions } from "@/core/agent/types";
 
@@ -30,4 +30,10 @@ test("Codex review uses the read-only sandbox", () => {
 test("Codex integration uses workspace-write", () => {
   const args = codexArgs(options("write"), "/tmp/output");
   assert.equal(args[args.indexOf("--sandbox") + 1], "workspace-write");
+});
+
+test("Claude's explicit result remains authoritative when the process exits zero", () => {
+  assert.equal(claudeSucceeded(false, { code: 0, signal: null }), false);
+  assert.equal(claudeSucceeded(true, { code: 0, signal: null }), true);
+  assert.equal(claudeSucceeded(true, { code: 1, signal: null }), false);
 });

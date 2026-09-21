@@ -45,6 +45,13 @@ export function verifyWorkflowPostconditions(options: {
     } else if (!options.after.installedVersion) {
       errors.push("The installed SDK version could not be detected after the upgrade.");
     } else if (
+      options.after.project.framework === "react-native" &&
+      options.after.installedVersionSource !== "lockfile"
+    ) {
+      errors.push(
+        "The React Native SDK version was not resolved from a lockfile after the upgrade.",
+      );
+    } else if (
       compareVersions(options.after.installedVersion, options.targetVersion) !== 0
     ) {
       errors.push(
