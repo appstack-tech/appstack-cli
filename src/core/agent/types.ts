@@ -1,4 +1,6 @@
-export type DriverId = "claude" | "codex";
+export const DRIVER_IDS = ["claude", "codex"] as const;
+
+export type DriverId = (typeof DRIVER_IDS)[number];
 
 export interface AgentCapabilities {
   filesystem: "read" | "write";

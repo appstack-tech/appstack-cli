@@ -3,6 +3,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import pc from "picocolors";
 import { FRAMEWORK_LABEL, VERSION, type FrameworkId } from "@/constants";
+import { DRIVER_IDS } from "@/core/agent";
 import { runWorkflow } from "@/commands/workflow";
 import { canLaunchTui, promptForWorkflow } from "@/tui";
 import { errorOutput, wantsJson, writeJson } from "@/output";
@@ -21,10 +22,11 @@ function workflowOptions(y: ReturnType<typeof yargs>) {
       choices: FRAMEWORKS,
       describe: "Select a framework when more than one app is detected",
     },
-    driver: {
+    agent: {
+      alias: "driver",
       type: "string",
-      choices: ["claude", "codex"] as const,
-      describe: "Force a coding-agent backend",
+      choices: DRIVER_IDS,
+      describe: "Select a coding agent",
     },
     skill: {
       type: "boolean",
@@ -63,6 +65,7 @@ function printHelp(): void {
       row("--dry-run", "Inspect without changing files"),
       row("--json", "Machine-readable deterministic inspection"),
       row("--framework <name>", "Select one app in a multi-app repository"),
+      row("--agent <name>", "Select a detected coding agent"),
       row("--install-dir <path>", "Inspect a directory other than cwd"),
       "",
       `Run ${pc.bold("appstack <command> --help")} for command-specific options.`,
@@ -108,7 +111,7 @@ export async function run(): Promise<void> {
           command: "integrate",
           installDir: argv.installDir,
           framework: argv.framework as FrameworkId | undefined,
-          driver: argv.driver,
+          driver: argv.agent,
           skill: argv.skill,
           dryRun: argv.dryRun,
           json: argv.json,
@@ -130,7 +133,7 @@ export async function run(): Promise<void> {
           command: "review",
           installDir: argv.installDir,
           framework: argv.framework as FrameworkId | undefined,
-          driver: argv.driver,
+          driver: argv.agent,
           skill: argv.skill,
           dryRun: argv.dryRun,
           json: argv.json,
@@ -151,7 +154,7 @@ export async function run(): Promise<void> {
           command: "upgrade",
           installDir: argv.installDir,
           framework: argv.framework as FrameworkId | undefined,
-          driver: argv.driver,
+          driver: argv.agent,
           skill: argv.skill,
           dryRun: argv.dryRun,
           json: argv.json,
