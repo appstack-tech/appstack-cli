@@ -37,6 +37,14 @@
     "typescript": "^5.7.0"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appstack-tech/appstack-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/appstack-tech/appstack-cli/issues"
+  },
+  "homepage": "https://github.com/appstack-tech/appstack-cli#readme",
   "publishConfig": {
     "access": "public"
   }

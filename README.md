@@ -121,3 +121,7 @@ npm test
 npm run build
 npm run dev -- review --install-dir /path/to/app
 ```
+
+Maintainers should follow the
+[release guide](https://github.com/appstack-tech/appstack-cli/blob/main/RELEASING.md)
+to publish matching npm and GitHub releases from a version tag.
