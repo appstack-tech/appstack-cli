@@ -9,8 +9,11 @@ export function claudeSucceeded(
 }
 
 function tools(options: AgentOptions): string[] {
-  const result = ["Read", "Glob", "Grep", "Bash", "WebFetch", "WebSearch"];
-  if (options.capabilities.filesystem === "write") result.push("Write", "Edit");
+  const result = ["Read", "Glob", "Grep"];
+  if (options.capabilities.filesystem === "write") {
+    result.push("Bash", "Write", "Edit");
+  }
+  if (options.capabilities.network) result.push("WebFetch", "WebSearch");
   return result;
 }
 

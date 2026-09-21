@@ -16,7 +16,6 @@ function options(mode: "read" | "write"): AgentOptions {
     capabilities: {
       filesystem: mode,
       network: true,
-      shell: mode === "read" ? "read-only" : "unrestricted",
     },
   };
 }
@@ -24,7 +23,20 @@ function options(mode: "read" | "write"): AgentOptions {
 test("Claude review runs in plan mode without write tools", () => {
   const args = claudeArgs(options("read"));
   assert.equal(args.includes("plan"), true);
-  assert.doesNotMatch(args.join(" "), /Write,Edit/);
+  const tools = args[args.indexOf("--allowedTools") + 1] ?? "";
+  assert.equal(tools.includes("Bash"), false);
+  assert.equal(tools.includes("Write"), false);
+  assert.equal(tools.includes("Edit"), false);
+  assert.equal(tools.includes("WebFetch"), true);
+});
+
+test("Claude honors disabled network access", () => {
+  const restricted = options("read");
+  restricted.capabilities.network = false;
+  const args = claudeArgs(restricted);
+  const tools = args[args.indexOf("--allowedTools") + 1] ?? "";
+  assert.equal(tools.includes("WebFetch"), false);
+  assert.equal(tools.includes("WebSearch"), false);
 });
 
 test("Codex review uses the read-only sandbox", () => {
