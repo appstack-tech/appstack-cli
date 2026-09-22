@@ -60,6 +60,107 @@ test("reports a missing dependency and initialization", () => {
   assert.equal(result.installedVersionSource, undefined);
 });
 
+test("finds platform key mismatches in native targets without exposing key values", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-platform-keys-"));
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({ dependencies: { "react-native-appstack-sdk": "2.4.0" } }),
+  );
+  mkdirSync(join(root, "ios"));
+  mkdirSync(join(root, "android"));
+  writeFileSync(join(root, "ios", "Keys.xcconfig"), "APPSTACK_KEY=pk_android_wrong1234567890\n");
+  writeFileSync(join(root, "android", "gradle.properties"), "appstackKey=pk_ios_wrong1234567890\n");
+  writeFileSync(join(root, "app.tsx"), "const keys = ['pk_ios_shared1234567890', 'pk_android_shared1234567890'];\n");
+
+  const result = inspectProject(reactNativeProject(root));
+  const mismatch = result.findings.find((item) => item.code === "api-key-platform-mismatch");
+  assert.equal(mismatch?.severity, "warning");
+  assert.deepEqual(mismatch?.files, ["android/gradle.properties", "ios/Keys.xcconfig"]);
+  assert.equal(JSON.stringify(result).includes("wrong1234567890"), false);
+});
+
+test("accepts matching platform keys in native targets", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-matching-keys-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: {} }));
+  mkdirSync(join(root, "ios"));
+  mkdirSync(join(root, "android"));
+  writeFileSync(join(root, "ios", "Keys.xcconfig"), "APPSTACK_KEY=pk_ios_correct1234567890\n");
+  writeFileSync(join(root, "android", "gradle.properties"), "appstackKey=pk_android_correct1234567890\n");
+
+  const result = inspectProject(reactNativeProject(root));
+  assert.equal(result.findings.some((item) => item.code === "api-key-platform-mismatch"), false);
+});
+
+test("finds a legacy key reused in native iOS and Android config", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-native-reuse-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: {} }));
+  mkdirSync(join(root, "ios"));
+  mkdirSync(join(root, "android"));
+  writeFileSync(join(root, "ios", "Keys.xcconfig"), "APPSTACK_KEY=pk_samelegacy1234567890\n");
+  writeFileSync(join(root, "android", "gradle.properties"), "appstackKey=pk_samelegacy1234567890\n");
+
+  const result = inspectProject(reactNativeProject(root));
+  const reused = result.findings.find((item) => item.code === "api-key-reused-across-platforms");
+  assert.equal(reused?.severity, "warning");
+  assert.deepEqual(reused?.files, ["android/gradle.properties", "ios/Keys.xcconfig"]);
+});
+
+test("checks Expo CNG platform config without native directories", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-expo-cng-"));
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({ dependencies: { expo: "54.0.0" } }),
+  );
+  writeFileSync(
+    join(root, "app.json"),
+    JSON.stringify({ expo: {
+      ios: { extra: { appstackKey: "pk_android_wrong1234567890" } },
+      android: { extra: { appstackKey: "pk_android_correct1234567890" } },
+    } }),
+  );
+
+  const result = inspectProject(reactNativeProject(root));
+  const mismatch = result.findings.find((item) => item.code === "api-key-platform-mismatch");
+  assert.deepEqual(mismatch?.files, ["app.json"]);
+  assert.equal(JSON.stringify(result).includes("wrong1234567890"), false);
+});
+
+test("detects one legacy key reused in both Expo CNG platforms", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-legacy-key-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { expo: "54.0.0" } }));
+  writeFileSync(
+    join(root, "app.json"),
+    JSON.stringify({ expo: {
+      ios: { extra: { appstackKey: "pk_legacy1234567890" } },
+      android: { extra: { appstackKey: "pk_legacy1234567890" } },
+    } }),
+  );
+
+  const result = inspectProject(reactNativeProject(root));
+  assert.equal(result.findings.some((item) => item.code === "api-key-platform-mismatch"), false);
+  assert.deepEqual(
+    result.findings.find((item) => item.code === "api-key-reused-across-platforms")?.files,
+    ["app.json"],
+  );
+  assert.equal(JSON.stringify(result).includes("legacy1234567890"), false);
+});
+
+test("accepts distinct legacy keys for iOS and Android", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-distinct-legacy-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { expo: "54.0.0" } }));
+  writeFileSync(
+    join(root, "app.json"),
+    JSON.stringify({ expo: {
+      ios: { extra: { appstackKey: "pk_legacy_ios1234567890" } },
+      android: { extra: { appstackKey: "pk_legacy_android1234567890" } },
+    } }),
+  );
+
+  const result = inspectProject(reactNativeProject(root));
+  assert.equal(result.findings.some((item) => item.code === "api-key-platform-mismatch"), false);
+  assert.equal(result.findings.some((item) => item.code === "api-key-reused-across-platforms"), false);
+});
+
 test("omits the version source when a platform version is not detected", () => {
   const root = mkdtempSync(join(tmpdir(), "appstack-inspect-empty-swift-"));
 

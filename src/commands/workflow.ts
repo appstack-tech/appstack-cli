@@ -78,10 +78,19 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     ios: args.iosApiKey ?? process.env.APPSTACK_IOS_API_KEY,
     android: args.androidApiKey ?? process.env.APPSTACK_ANDROID_API_KEY,
   };
+  const samePlatformKey = Boolean(
+    args.command === "integrate" &&
+    keyValues.ios &&
+    keyValues.android &&
+    keyValues.ios === keyValues.android
+  );
 
   if (!args.skill) {
     ui.intro(`Appstack ${args.command}`);
     printInspection(inspection);
+    if (samePlatformKey) {
+      ui.warning("The supplied iOS and Android API keys are identical. Use a different key for each platform when available.");
+    }
   }
 
   if (args.command === "upgrade") {
@@ -115,6 +124,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
         generic: Boolean(keyValues.generic),
         ios: Boolean(keyValues.ios),
         android: Boolean(keyValues.android),
+        samePlatformKey,
       },
       copyMode: args.skill,
       verbose: args.verbose,

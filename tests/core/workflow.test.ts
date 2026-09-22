@@ -70,3 +70,25 @@ test("JSON output is a deterministic inspection and does not mutate its argument
   assert.equal("inspection" in result, true);
   assert.equal("latest" in result, false);
 });
+
+test("integration warns about the same supplied key without blocking", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-workflow-same-keys-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { expo: "54.0.0" } }));
+  let output = "";
+  t.mock.method(process.stdout, "write", (chunk: string | Uint8Array) => {
+    if (typeof chunk === "string") output += chunk;
+    return true;
+  });
+
+  await assert.doesNotReject(
+    runWorkflow({
+      command: "integrate",
+      installDir: root,
+      dryRun: true,
+      iosApiKey: "pk_legacy1234567890",
+      androidApiKey: "pk_legacy1234567890",
+    }),
+  );
+  assert.match(output, /supplied iOS and Android API keys are identical/);
+  assert.doesNotMatch(output, /pk_legacy1234567890/);
+});

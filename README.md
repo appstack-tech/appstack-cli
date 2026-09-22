@@ -68,12 +68,18 @@ appstack integrate --agent codex
 ## API keys
 
 Pass integration keys through the environment or enter them in the masked TUI
-prompt. Keys are not accepted as command-line flags because those values can be
-retained in shell history or exposed in process listings:
+prompt. Use `APPSTACK_API_KEY` for a single-platform app, or
+`APPSTACK_IOS_API_KEY` and `APPSTACK_ANDROID_API_KEY` for an app that targets
+both platforms. Keys are not accepted as command-line flags because those values
+can be retained in shell history or exposed in process listings:
 
 ```bash
+APPSTACK_API_KEY=... appstack integrate
 APPSTACK_IOS_API_KEY=... APPSTACK_ANDROID_API_KEY=... appstack integrate
 ```
+
+Get your keys from your Appstack account. Each platform has its own key; the
+CLI warns when the iOS and Android keys are identical.
 
 The CLI never creates keys and instructs the agent not to print key values.
 
