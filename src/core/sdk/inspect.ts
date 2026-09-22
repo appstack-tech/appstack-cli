@@ -480,7 +480,7 @@ export function inspectProject(project: DetectedProject): Inspection {
     findings.push({
       code: "api-key-platform-mismatch",
       severity: "warning",
-      message: "An Appstack API key prefix conflicts with an iOS or Android source location or Expo platform config. Verify the key used by each app target.",
+      message: "An Appstack API key prefix conflicts with its iOS or Android configuration. Use the key assigned to that platform.",
       files: uniqueFiles(project.path, wrongPlatformKeyFiles),
     });
   }
@@ -488,7 +488,7 @@ export function inspectProject(project: DetectedProject): Inspection {
     findings.push({
       code: "api-key-reused-across-platforms",
       severity: "warning",
-      message: "The same Appstack API key appears in both iOS and Android target configuration. Each platform needs its own key.",
+      message: "The same Appstack API key appears in both iOS and Android configuration. Use a different key for each platform.",
       files: uniqueFiles(project.path, reusedKeyFiles),
     });
   }

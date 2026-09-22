@@ -58,7 +58,11 @@ test("default review is capped and distinguishes findings from uncertainty", () 
   assert.match(prompt, /Do not classify absent checked-in API keys as a finding/);
   assert.match(prompt, /pk_android_ key for iOS/);
   assert.match(prompt, /For Expo CNG, inspect app config/);
-  assert.match(prompt, /Report proven reuse of one key on both platforms/);
+  assert.match(prompt, /Report proven reuse as a warning/);
+  assert.match(prompt, /Wrong-platform or reused API keys are configuration warnings to fix, but they do not break attribution/);
+  assert.match(prompt, /actual key assignments cannot be verified from the repo/);
+  assert.match(prompt, /same legacy key is never valid for both platforms/);
+  assert.match(prompt, /Do not fill Needs confirmation with optional event coverage/);
   assert.match(prompt, /Do not require checking its return value/);
   assert.match(prompt, /Needs confirmation/);
 });
@@ -97,4 +101,26 @@ test("all workflows treat configure return as an acknowledgment", () => {
     assert.match(prompt, /do not require callers to inspect a boolean or void return/);
     assert.match(prompt, /Verify key presence and platform selection instead/);
   }
+});
+
+test("all workflows describe key mix-ups as warnings without claiming lost attribution", () => {
+  for (const workflow of ["integrate", "review", "upgrade"] as const) {
+    const prompt = buildPrompt({ workflow, inspection, skill });
+    assert.match(prompt, /Wrong-platform or reused Appstack keys are warnings to correct/);
+    assert.match(prompt, /they do not break attribution/);
+    assert.match(prompt, /Do not claim they cause rejected events, missing attribution, or lost revenue/);
+    assert.match(prompt, /do not ask whether one legacy key might be valid for both/);
+  }
+});
+
+test("integration keeps identical supplied keys available while requesting a correction", () => {
+  const prompt = buildPrompt({
+    workflow: "integrate",
+    inspection,
+    skill,
+    apiKeys: { ios: true, android: true, samePlatformKey: true },
+  });
+  assert.match(prompt, /supplied iOS and Android keys are identical/);
+  assert.match(prompt, /Continue with the supplied values/);
+  assert.doesNotMatch(prompt, /pk_[A-Za-z0-9_-]{12,}/);
 });

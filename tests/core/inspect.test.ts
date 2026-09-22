@@ -74,6 +74,7 @@ test("finds platform key mismatches in native targets without exposing key value
 
   const result = inspectProject(reactNativeProject(root));
   const mismatch = result.findings.find((item) => item.code === "api-key-platform-mismatch");
+  assert.equal(mismatch?.severity, "warning");
   assert.deepEqual(mismatch?.files, ["android/gradle.properties", "ios/Keys.xcconfig"]);
   assert.equal(JSON.stringify(result).includes("wrong1234567890"), false);
 });
@@ -99,10 +100,9 @@ test("finds a legacy key reused in native iOS and Android config", () => {
   writeFileSync(join(root, "android", "gradle.properties"), "appstackKey=pk_samelegacy1234567890\n");
 
   const result = inspectProject(reactNativeProject(root));
-  assert.deepEqual(
-    result.findings.find((item) => item.code === "api-key-reused-across-platforms")?.files,
-    ["android/gradle.properties", "ios/Keys.xcconfig"],
-  );
+  const reused = result.findings.find((item) => item.code === "api-key-reused-across-platforms");
+  assert.equal(reused?.severity, "warning");
+  assert.deepEqual(reused?.files, ["android/gradle.properties", "ios/Keys.xcconfig"]);
 });
 
 test("checks Expo CNG platform config without native directories", () => {
