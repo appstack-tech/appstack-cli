@@ -25,6 +25,35 @@ test("detects a React Native app and suppresses its generated iOS project", asyn
   assert.equal(projects[0]?.relativePath, ".");
 });
 
+test("ignores Gradle build helper projects such as buildSrc and build-logic", async () => {
+  const root = fixture();
+  writeFileSync(join(root, "settings.gradle.kts"), 'rootProject.name = "app"\n');
+  for (const helper of ["buildSrc", "build-logic"]) {
+    mkdirSync(join(root, helper), { recursive: true });
+    writeFileSync(join(root, helper, "settings.gradle.kts"), `rootProject.name = "${helper}"\n`);
+  }
+
+  const projects = await scanProjects(root);
+  assert.deepEqual(
+    projects.map((item) => item.relativePath),
+    ["."],
+  );
+});
+
+test("suppresses local plugin packages nested inside the app", async () => {
+  const root = fixture();
+  writeFileSync(join(root, "pubspec.yaml"), "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n");
+  const plugin = join(root, "plugins", "proxy");
+  mkdirSync(plugin, { recursive: true });
+  writeFileSync(join(plugin, "pubspec.yaml"), "name: proxy\ndependencies:\n  flutter:\n    sdk: flutter\n");
+
+  const projects = await scanProjects(root);
+  assert.deepEqual(
+    projects.map((item) => item.relativePath),
+    ["."],
+  );
+});
+
 test("detects separate apps in a monorepo", async () => {
   const root = fixture();
   const flutter = join(root, "apps", "mobile");
