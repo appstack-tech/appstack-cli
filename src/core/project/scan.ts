@@ -10,6 +10,8 @@ const IGNORE = [
   "**/.dart_tool/**",
   "**/.build/**",
   "**/build/**",
+  "**/buildSrc/**",
+  "**/build-logic/**",
   "**/DerivedData/**",
   "**/Library/**",
 ];
@@ -105,9 +107,17 @@ export async function scanProjects(root: string): Promise<DetectedProject[]> {
 
   const unique = new Map<string, DetectedProject>();
   for (const item of results) unique.set(`${item.framework}:${item.path}`, item);
-  return [...unique.values()].sort((a, b) =>
-    a.relativePath.localeCompare(b.relativePath),
-  );
+  const all = [...unique.values()];
+  const nested = (item: DetectedProject) =>
+    all.some(
+      (parent) =>
+        parent.framework === item.framework &&
+        parent.path !== item.path &&
+        inside(item.path, parent.path),
+    );
+  return all
+    .filter((item) => !nested(item))
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
 export async function resolveProject(

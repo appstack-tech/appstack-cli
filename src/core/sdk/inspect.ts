@@ -12,6 +12,8 @@ const IGNORE = [
   "**/.dart_tool/**",
   "**/.build/**",
   "**/build/**",
+  "**/buildSrc/**",
+  "**/build-logic/**",
   "**/DerivedData/**",
   "**/Library/**",
   "**/AppstackSDK.xcframework/**",
