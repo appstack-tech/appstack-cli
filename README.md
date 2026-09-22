@@ -1,73 +1,96 @@
 # Appstack CLI
 
-Install, check, and upgrade the Appstack mobile attribution SDK in your app with a coding agent.
+Agent-powered integration, review, and upgrades for the Appstack mobile
+attribution SDKs.
 
-Appstack CLI supports Swift (iOS), Kotlin (Android), React Native, Flutter, and Unity projects. It detects your app, checks the existing SDK setup, and gives a supported coding agent the Appstack instructions for your framework.
+It works with Swift/iOS, Kotlin/Android, React Native, Flutter, and Unity apps.
+It does not create Appstack accounts, apps, campaigns, or dashboard resources.
 
-## Get started
+## How it works
 
-You need Node.js 20 or later and a mobile app project. To let the CLI make changes or perform a full review, install one of these coding agents and make sure its command is on your `PATH`: Claude Code, Codex, OpenCode, or Pi.
+The CLI detects your app and framework, runs deterministic checks, then hands
+off to your coding agent (Claude Code, Codex, OpenCode, or Pi) with the official
+framework-specific Appstack skill. The skill is downloaded from the latest
+published release at run time, so every run uses current integration guidance.
+
+## Installation
 
 ```bash
 npm install -g appstack-cli
-cd /path/to/your/app
+```
+
+Then run it from your app directory:
+
+```bash
 appstack
 ```
 
-Running `appstack` in a terminal opens a guided flow. Choose the app, what you want to do, and whether to run an agent, inspect only, or print the instructions to use yourself. The flow asks for confirmation before an integration or upgrade changes files.
+Run with no arguments in an interactive terminal to open the guided TUI. It
+detects your apps, lets you choose a workflow and coding agent, masks API-key
+entry, and asks for confirmation before any command changes files.
 
-You can also run a workflow directly:
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `appstack integrate` | Installs and configures the SDK using your app's package manager and startup architecture |
+| `appstack review` | Audits an existing integration. Read-only |
+| `appstack upgrade` | Upgrades to the latest stable SDK and migrates changed APIs |
+| `appstack skill uninstall` | Removes downloaded Appstack skills from your cache |
+
+### Flags
+
+| Flag | What it does |
+| --- | --- |
+| `--skill` | Print the project-specific playbook instead of running an agent |
+| `--dry-run` | Inspect and show the plan without changing files |
+| `--json` | Print the deterministic inspection as JSON |
+| `--framework <name>` | Select one app in a multi-app repository |
+| `--agent <name>` | Select a detected coding agent (`claude`, `codex`, `opencode`, `pi`) |
+| `--install-dir <path>` | Inspect a directory other than the current one |
+| `--to <version>` | Target SDK version for `upgrade` (default: latest stable) |
+| `--verbose` | Exhaustive audit for `review` |
+
+Reviews are concise by default: one overall status, up to five verified
+findings, and a short needs-confirmation list. Add `--verbose` for the full
+audit.
+
+## Try it
 
 ```bash
 appstack integrate
 appstack review
-appstack upgrade
+appstack review --json
+appstack upgrade --to 2.6.0 --dry-run
+appstack integrate --agent codex
 ```
-
-| Command | What it does |
-| --- | --- |
-| `appstack integrate` | Installs and configures the SDK in your app. |
-| `appstack review` | Checks an existing integration without changing files. |
-| `appstack upgrade` | Updates the SDK to the latest stable version and handles required migration work. |
-
-If you run a direct command and more than one coding agent is installed, select one with `--agent claude`, `--agent codex`, `--agent opencode`, or `--agent pi`. You can run from a different directory with `--install-dir <path>`. In a repository with multiple apps, run from the app directory or use `--framework <name>` when that identifies one app.
 
 ## API keys
 
-For integration, enter your Appstack API key in the guided flow or provide it through environment variables. The guided flow masks key entry. For a direct command, use `APPSTACK_API_KEY` for a single-platform app, or `APPSTACK_IOS_API_KEY` and `APPSTACK_ANDROID_API_KEY` for an app that targets both platforms:
+Pass integration keys through the environment or enter them in the masked TUI
+prompt. Use `APPSTACK_API_KEY` for a single-platform app, or
+`APPSTACK_IOS_API_KEY` and `APPSTACK_ANDROID_API_KEY` for an app that targets
+both platforms. Keys are not accepted as command-line flags because those values
+can be retained in shell history or exposed in process listings:
 
 ```bash
 APPSTACK_API_KEY=... appstack integrate
 APPSTACK_IOS_API_KEY=... APPSTACK_ANDROID_API_KEY=... appstack integrate
 ```
 
-Get your keys from your Appstack account. The CLI does not create keys or accept them as command-line flags.
+Get your keys from your Appstack account. Each platform has its own key; the
+CLI warns when the iOS and Android keys are identical.
 
-## Inspect before running
+The CLI never creates keys and instructs the agent not to print key values.
 
-Use `--dry-run` to inspect the app without starting an agent or changing files. Use `--json` to get the deterministic inspection as JSON. A review gives a concise report by default; add `--verbose` for more detail.
+## Skill updates
 
-```bash
-appstack integrate --dry-run
-appstack review --json
-appstack review --verbose
-appstack upgrade --to 2.6.0 --dry-run
-```
+The CLI does not bundle the skill. It downloads the latest published
+`appstack-skills` release, verifies it, and caches it, checking at most once
+every 24 hours. The first run needs network access. Set
+`APPSTACK_SKILL_UPDATES=off` to disable refreshes, or
+`APPSTACK_SKILL_DIR=/path/to/appstack-sdk` to use a local development copy.
 
-Use `--skill` to print the full framework-specific instructions so you can run them with your own agent. If no supported agent is available, `review` still shows the deterministic checks; `integrate` and `upgrade` need an agent or the `--skill` option.
+## License
 
-```bash
-appstack integrate --skill
-```
-
-## Skill downloads
-
-The CLI downloads the current Appstack SDK instructions from the [Appstack skills releases](https://github.com/appstack-tech/appstack-skills/releases) and caches them for your user account. The first workflow that needs these instructions requires network access. Later runs can use the cached copy if an update check fails. `--dry-run` and `--json` do not download instructions.
-
-To remove downloaded instructions, run:
-
-```bash
-appstack skill uninstall
-```
-
-Run `appstack --help` or `appstack <command> --help` for all available options.
+MIT
