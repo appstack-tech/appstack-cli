@@ -70,3 +70,19 @@ test("JSON output is a deterministic inspection and does not mutate its argument
   assert.equal("inspection" in result, true);
   assert.equal("latest" in result, false);
 });
+
+test("integration rejects the same supplied key for both platforms", async () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-workflow-same-keys-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { expo: "54.0.0" } }));
+
+  await assert.rejects(
+    runWorkflow({
+      command: "integrate",
+      installDir: root,
+      dryRun: true,
+      iosApiKey: "pk_legacy1234567890",
+      androidApiKey: "pk_legacy1234567890",
+    }),
+    /iOS and Android require different Appstack API keys/,
+  );
+});

@@ -78,6 +78,14 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     ios: args.iosApiKey ?? process.env.APPSTACK_IOS_API_KEY,
     android: args.androidApiKey ?? process.env.APPSTACK_ANDROID_API_KEY,
   };
+  if (
+    args.command === "integrate" &&
+    keyValues.ios &&
+    keyValues.android &&
+    keyValues.ios === keyValues.android
+  ) {
+    throw new Error("iOS and Android require different Appstack API keys.");
+  }
 
   if (!args.skill) {
     ui.intro(`Appstack ${args.command}`);

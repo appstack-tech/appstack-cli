@@ -56,7 +56,10 @@ test("default review is capped and distinguishes findings from uncertainty", () 
   const prompt = buildPrompt({ workflow: "review", inspection, skill });
   assert.match(prompt, /at most 5 verified, actionable problems/);
   assert.match(prompt, /Do not classify absent checked-in API keys as a finding/);
-  assert.match(prompt, /Ignoring configure\(\)'s boolean return is not automatically a finding/);
+  assert.match(prompt, /pk_android_ key for iOS/);
+  assert.match(prompt, /For Expo CNG, inspect app config/);
+  assert.match(prompt, /Report proven reuse of one key on both platforms/);
+  assert.match(prompt, /Do not require checking its return value/);
   assert.match(prompt, /Needs confirmation/);
 });
 
@@ -64,4 +67,34 @@ test("verbose review requests the exhaustive report", () => {
   const prompt = buildPrompt({ workflow: "review", inspection, skill, verbose: true });
   assert.match(prompt, /Setup health/);
   assert.match(prompt, /Opportunities/);
+  assert.match(prompt, /trace each target's API key configuration/);
+  assert.match(prompt, /For Expo CNG, inspect app config/);
+  assert.match(prompt, /legacy pk_ keys are also valid but their text does not identify the platform/);
+});
+
+test("all workflows treat customerUserId as optional cross-system mapping", () => {
+  for (const workflow of ["integrate", "review", "upgrade"] as const) {
+    const prompt = buildPrompt({ workflow, inspection, skill });
+    assert.match(prompt, /customerUserId is optional/);
+    assert.match(prompt, /Attribution does not require it/);
+    assert.match(prompt, /Do not add it or report its absence as a finding/);
+  }
+});
+
+test("all workflows treat the user_attributes event name as an example", () => {
+  for (const workflow of ["integrate", "review", "upgrade"] as const) {
+    const prompt = buildPrompt({ workflow, inspection, skill });
+    assert.match(prompt, /User attributes can be received from any event/);
+    assert.match(prompt, /Do not flag or request confirmation about a custom event's name or casing/);
+    assert.match(prompt, /Assess parameter keys and values separately/);
+  }
+});
+
+test("all workflows treat configure return as an acknowledgment", () => {
+  for (const workflow of ["integrate", "review", "upgrade"] as const) {
+    const prompt = buildPrompt({ workflow, inspection, skill });
+    assert.match(prompt, /asynchronous SDK setup can continue afterward/);
+    assert.match(prompt, /do not require callers to inspect a boolean or void return/);
+    assert.match(prompt, /Verify key presence and platform selection instead/);
+  }
 });

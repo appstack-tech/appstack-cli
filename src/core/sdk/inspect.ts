@@ -27,6 +27,11 @@ const SOURCE_GLOBS: Record<FrameworkId, string[]> = {
   unity: ["Assets/**/*.cs", "Assets/**/*.asset", "Packages/manifest.json"],
 };
 
+const PLATFORM_CONFIG_GLOBS = [
+  "ios/**/*.{swift,m,mm,h,plist,pbxproj,xcconfig,properties,json,js,jsx,ts,tsx}",
+  "android/**/*.{kt,kts,java,gradle,xml,properties,json,js,jsx,ts,tsx}",
+];
+
 const CONFIGURE: Record<FrameworkId, RegExp> = {
   swift: /AppstackAttributionSdk\.shared\.configure\s*\(/g,
   kotlin: /AppstackAttributionSdk\.configure\s*\(/g,
@@ -290,12 +295,47 @@ export function installedVersion(project: DetectedProject): string | undefined {
 }
 
 function sourceFiles(project: DetectedProject): string[] {
-  return fg.sync(SOURCE_GLOBS[project.framework], {
+  return fg.sync([...SOURCE_GLOBS[project.framework], ...PLATFORM_CONFIG_GLOBS], {
     cwd: project.path,
     absolute: true,
     ignore: IGNORE,
     deep: 8,
   });
+}
+
+function filePlatform(project: DetectedProject, file: string): "ios" | "android" | undefined {
+  const path = relative(project.path, file).replaceAll("\\", "/");
+  if (path.startsWith("ios/")) return "ios";
+  if (path.startsWith("android/")) return "android";
+  if (project.framework === "swift") return "ios";
+  if (project.framework === "kotlin") return "android";
+  return undefined;
+}
+
+function keyLiterals(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value.match(/\bpk_[A-Za-z0-9_-]{12,}\b/g) ?? [];
+  }
+  if (Array.isArray(value)) return value.flatMap(keyLiterals);
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap(keyLiterals);
+  }
+  return [];
+}
+
+function keyPlatform(key: string): "ios" | "android" | undefined {
+  if (key.startsWith("pk_ios_")) return "ios";
+  if (key.startsWith("pk_android_")) return "android";
+  return undefined;
+}
+
+function expoPlatformConfig(project: DetectedProject): { ios?: unknown; android?: unknown } | undefined {
+  if (project.framework !== "react-native") return undefined;
+  const packageJson = readJson<PackageJson>(join(project.path, "package.json"));
+  if (!packageJson?.dependencies?.expo && !packageJson?.devDependencies?.expo) return undefined;
+  return readJson<{ expo?: { ios?: unknown; android?: unknown } }>(
+    join(project.path, "app.json"),
+  )?.expo;
 }
 
 function uniqueFiles(root: string, files: string[]): string[] {
@@ -312,6 +352,21 @@ export function inspectProject(project: DetectedProject): Inspection {
   const deprecatedFiles: string[] = [];
   const manualInstallFiles: string[] = [];
   const keyFiles: string[] = [];
+  const wrongPlatformKeyFiles: string[] = [];
+  const platformKeys: Record<"ios" | "android", Map<string, Set<string>>> = {
+    ios: new Map(),
+    android: new Map(),
+  };
+  const recordKeys = (platform: "ios" | "android", file: string, keys: string[]) => {
+    for (const key of keys) {
+      const locations = platformKeys[platform].get(key) ?? new Set<string>();
+      locations.add(file);
+      platformKeys[platform].set(key, locations);
+      if (keyPlatform(key) && keyPlatform(key) !== platform) {
+        wrongPlatformKeyFiles.push(file);
+      }
+    }
+  };
   const customNames = new Set<string>();
 
   for (const file of files) {
@@ -340,7 +395,10 @@ export function inspectProject(project: DetectedProject): Inspection {
     ) {
       manualInstallFiles.push(file);
     }
-    if (/\bpk_[A-Za-z0-9_-]{12,}\b/.test(analyzed)) keyFiles.push(file);
+    const keys = keyLiterals(analyzed);
+    if (keys.length) keyFiles.push(file);
+    const platform = filePlatform(project, file);
+    if (platform) recordKeys(platform, file, keys);
 
     const customPatterns = [
       /(?:CUSTOM|\.custom)[\s\S]{0,120}?(?:eventName|name)\s*[:=]\s*["']([^"']+)["']/g,
@@ -360,6 +418,16 @@ export function inspectProject(project: DetectedProject): Inspection {
     }).length > 0;
   const configured = configureCount > 0 || unitySettings;
   const installed = dependencyInstalled(project);
+  const expoConfig = expoPlatformConfig(project);
+  for (const platform of ["ios", "android"] as const) {
+    recordKeys(platform, join(project.path, "app.json"), keyLiterals(expoConfig?.[platform]));
+  }
+  const reusedKeyFiles = [...platformKeys.ios.entries()]
+    .filter(([key]) => platformKeys.android.has(key))
+    .flatMap(([key, iosFiles]) => [
+      ...iosFiles,
+      ...platformKeys.android.get(key)!,
+    ]);
   const findings: Finding[] = [];
 
   if (!installed) {
@@ -406,6 +474,22 @@ export function inspectProject(project: DetectedProject): Inspection {
       severity: "warning",
       message: "A likely Appstack API key is hardcoded in source. Prefer the platform's environment/config mechanism.",
       files: uniqueFiles(project.path, keyFiles),
+    });
+  }
+  if (wrongPlatformKeyFiles.length) {
+    findings.push({
+      code: "api-key-platform-mismatch",
+      severity: "warning",
+      message: "An Appstack API key prefix conflicts with an iOS or Android source location or Expo platform config. Verify the key used by each app target.",
+      files: uniqueFiles(project.path, wrongPlatformKeyFiles),
+    });
+  }
+  if (reusedKeyFiles.length) {
+    findings.push({
+      code: "api-key-reused-across-platforms",
+      severity: "warning",
+      message: "The same Appstack API key appears in both iOS and Android target configuration. Each platform needs its own key.",
+      files: uniqueFiles(project.path, reusedKeyFiles),
     });
   }
   if (customNames.size > 10) {
