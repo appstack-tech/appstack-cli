@@ -2,11 +2,12 @@ import * as p from "@clack/prompts";
 import { resolve } from "node:path";
 import pc from "picocolors";
 import type { WorkflowArgs } from "@/commands/workflow";
+import { displayPath, renderBanner, type BannerRow } from "@/banner";
 import { VERSION, type FrameworkId } from "@/constants";
 import { detectDrivers, type AgentDriver, type DriverId } from "@/core/agent";
 import { scanProjects, type DetectedProject } from "@/core/project/scan";
 import type { WorkflowId } from "@/core/agent/prompt";
-import { configurePromptTheme, theme } from "@/theme";
+import { configurePromptTheme } from "@/theme";
 
 configurePromptTheme();
 
@@ -18,22 +19,10 @@ function cancelled(value: unknown): value is symbol {
   return true;
 }
 
-async function chooseProject(root: string): Promise<DetectedProject | undefined> {
-  const spinner = p.spinner();
-  spinner.start("Detecting mobile apps");
-  const projects = await scanProjects(root);
-  if (!projects.length) {
-    spinner.stop("No supported mobile app found", 1);
-    p.cancel(`Run Appstack from a Swift, Kotlin, React Native, Flutter, or Unity project.`);
-    return undefined;
-  }
-  spinner.stop(
-    projects.length === 1
-      ? `Found ${projects[0]!.frameworkLabel}`
-      : `Found ${projects.length} mobile apps`,
-  );
+async function chooseProject(
+  projects: DetectedProject[],
+): Promise<DetectedProject | undefined> {
   if (projects.length === 1) return projects[0];
-
   const selected = await p.select({
     message: "Which app do you want to work on?",
     options: projects.map((project, index) => ({
@@ -82,23 +71,12 @@ async function chooseMode(): Promise<RunMode | undefined> {
   return cancelled(mode) ? undefined : mode;
 }
 
-async function chooseAgent(): Promise<DriverId | null | undefined> {
-  const spinner = p.spinner();
-  spinner.start("Detecting coding agents");
-  const drivers = await detectDrivers();
-  if (!drivers.length) {
-    spinner.stop("No supported coding agent found", 1);
-    return null;
-  }
-  if (drivers.length === 1) {
-    spinner.stop(`Found ${drivers[0]!.displayName}`);
-    return drivers[0]!.id;
-  }
-  spinner.stop(`Found ${drivers.length} coding agents`);
-
+async function chooseAgent(drivers: AgentDriver[]): Promise<DriverId | null | undefined> {
+  if (!drivers.length) return null;
+  if (drivers.length === 1) return drivers[0]!.id;
   const selected = await p.select<DriverId>({
     message: "Which coding agent should Appstack use?",
-    options: drivers.map((driver: AgentDriver) => ({
+    options: drivers.map((driver) => ({
       value: driver.id,
       label: driver.displayName,
     })),
@@ -159,6 +137,35 @@ async function addUpgradeTarget(args: WorkflowArgs): Promise<boolean> {
   return true;
 }
 
+const TIPS = [
+  `Run ${pc.bold("appstack review --dry-run")} for a deterministic check without an agent.`,
+  `Pass ${pc.bold("--skill")} to print the playbook and paste it into any agent.`,
+  `Run ${pc.bold("appstack help")} to see every command and flag.`,
+  `Use ${pc.bold("--json")} to get the inspection as machine-readable output.`,
+];
+
+export function bannerRows(
+  root: string,
+  projects: DetectedProject[],
+  drivers: AgentDriver[],
+): BannerRow[] {
+  const app: BannerRow = !projects.length
+    ? { label: "app", value: "no supported mobile app found", tone: "error" }
+    : projects.length === 1
+      ? {
+          label: "app",
+          value: `${projects[0]!.name} · ${projects[0]!.frameworkLabel}`,
+        }
+      : { label: "app", value: `${projects.length} apps detected` };
+  return [
+    app,
+    drivers.length
+      ? { label: "agent", value: drivers.map((driver) => driver.displayName).join(", ") }
+      : { label: "agent", value: "none detected (playbook mode only)", tone: "muted" },
+    { label: "directory", value: displayPath(root), truncate: "start" },
+  ];
+}
+
 export function canLaunchTui(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY && process.env.TERM !== "dumb");
 }
@@ -167,9 +174,20 @@ export async function promptForWorkflow(
   installDir = process.cwd(),
 ): Promise<WorkflowArgs | undefined> {
   const root = resolve(installDir);
-  p.intro(`${theme.wordmark(" Appstack ")} ${pc.dim(`v${VERSION}`)}`);
+  const [projects, drivers] = await Promise.all([scanProjects(root), detectDrivers()]);
+  process.stdout.write(
+    `${renderBanner({
+      version: VERSION,
+      rows: bannerRows(root, projects, drivers),
+      tip: projects.length ? TIPS[Math.floor(Math.random() * TIPS.length)] : undefined,
+    }).join("\n")}\n`,
+  );
 
-  const project = await chooseProject(root);
+  if (!projects.length) {
+    p.cancel("Run Appstack from a Swift, Kotlin, React Native, Flutter, or Unity project.");
+    return undefined;
+  }
+  const project = await chooseProject(projects);
   if (!project) return undefined;
   const command = await chooseWorkflow();
   if (!command) return undefined;
@@ -185,7 +203,7 @@ export async function promptForWorkflow(
   };
 
   if (mode === "run") {
-    const driver = await chooseAgent();
+    const driver = await chooseAgent(drivers);
     if (driver === undefined) return undefined;
     if (driver === null && command !== "review") {
       p.cancel(
