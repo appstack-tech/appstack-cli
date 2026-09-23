@@ -1,5 +1,5 @@
 import type { AgentDriver, AgentOptions, AgentResult } from "../types";
-import { extractStatus, onPath, spawnFailure, spawnLines } from "../spawn";
+import { createStatusStream, onPath, spawnFailure, spawnLines } from "../spawn";
 
 export function piTools(options: AgentOptions): string[] {
   const tools = ["read", "grep", "find", "ls"];
@@ -42,8 +42,7 @@ export const piDriver: AgentDriver = {
   detect: () => onPath("pi"),
   async run(options): Promise<AgentResult> {
     let finalText: string | undefined;
-    let statusBuffer = "";
-    let lastStatus: string | undefined;
+    const statuses = createStatusStream((status) => options.onStatus?.(status));
     const sensitiveValues = [
       options.env?.APPSTACK_API_KEY ?? "",
       options.env?.APPSTACK_IOS_API_KEY ?? "",
@@ -63,16 +62,12 @@ export const piDriver: AgentDriver = {
             assistantMessageEvent?: { type?: unknown; delta?: unknown };
           };
           if (event.type === "message_end") {
+            statuses.end();
             finalText = messageText(event.message) ?? finalText;
           }
           const delta = event.assistantMessageEvent?.delta;
           if (event.assistantMessageEvent?.type === "text_delta" && typeof delta === "string") {
-            statusBuffer = `${statusBuffer}${delta}`.slice(-1_000);
-            const status = extractStatus(statusBuffer);
-            if (status && status !== lastStatus) {
-              lastStatus = status;
-              options.onStatus?.(status);
-            }
+            statuses.push(delta);
           }
         } catch {
           // Pi events are best-effort UI data; the exit code remains authoritative.

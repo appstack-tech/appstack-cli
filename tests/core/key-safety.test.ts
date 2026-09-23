@@ -22,6 +22,7 @@ const inspection: Inspection = {
   configureCount: 1,
   eventCallCount: 3,
   customEventNames: [],
+  partners: [],
   findings: [],
 };
 const skill = loadSkillFromRoot(skillRoot, "swift");

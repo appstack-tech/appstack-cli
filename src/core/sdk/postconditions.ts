@@ -58,6 +58,14 @@ export function verifyWorkflowPostconditions(options: {
         `Expected SDK ${options.targetVersion}, but detected ${options.after.installedVersion}.`,
       );
     }
+    const removedApi = options.after.findings.find(
+      (finding) => finding.code === "react-native-removed-api",
+    );
+    if (removedApi) {
+      errors.push(
+        `Removed 2.x call shapes remain${removedApi.files?.length ? ` in ${removedApi.files.join(", ")}` : ""}.`,
+      );
+    }
   }
 
   return { ok: errors.length === 0, errors };

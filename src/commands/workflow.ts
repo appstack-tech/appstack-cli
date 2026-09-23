@@ -13,6 +13,7 @@ import {
 } from "@/core/sdk/latest";
 import { verifyWorkflowPostconditions } from "@/core/sdk/postconditions";
 import { resolveSkill } from "@/core/skill/resolve";
+import type { TaskReference } from "@/core/skill/types";
 import { writeJson } from "@/output";
 import * as ui from "@/ui";
 
@@ -31,7 +32,33 @@ export interface WorkflowArgs {
   verbose?: boolean;
 }
 
-function printInspection(inspection: Inspection): void {
+// The shared SKILL.md routes each task to framework-neutral references. Load
+// only the ones this workflow needs.
+export function taskReferences(command: WorkflowId, inspection: Inspection): TaskReference[] {
+  const partner: TaskReference[] = inspection.partners.length ? ["partner-integrations"] : [];
+  switch (command) {
+    case "review":
+      return ["review-troubleshooting", "event-design", ...partner];
+    case "integrate":
+      return partner;
+    case "upgrade":
+      return [];
+  }
+}
+
+export function stripStatusLines(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !/^\s*\[STATUS\]/.test(line))
+    .join("\n")
+    .trim();
+}
+
+// Before integration, a missing dependency and initialization are the
+// expected starting state, not errors.
+const INTEGRATE_START = new Set(["sdk-not-installed", "configure-missing"]);
+
+function printInspection(inspection: Inspection, command?: WorkflowId): void {
   ui.info(
     `${inspection.project.frameworkLabel} · ${inspection.project.relativePath} · SDK ${inspection.installedVersion ?? "not detected"}`,
   );
@@ -39,11 +66,46 @@ function printInspection(inspection: Inspection): void {
     ui.success("No deterministic integration problems found.");
     return;
   }
+  if (
+    command === "integrate" &&
+    inspection.findings.every((finding) => INTEGRATE_START.has(finding.code))
+  ) {
+    ui.info("Appstack is not integrated yet.");
+    return;
+  }
   for (const finding of inspection.findings) {
     ui.finding(
-      finding.severity,
+      command === "integrate" && INTEGRATE_START.has(finding.code) ? "info" : finding.severity,
       `${finding.message}${finding.files?.length ? ` ${pc.dim(`(${finding.files.join(", ")})`)}` : ""}`,
     );
+  }
+}
+
+function printPlan(
+  command: WorkflowId,
+  inspection: Inspection,
+  keys: { generic?: string; ios?: string; android?: string },
+): void {
+  const names = [
+    keys.generic ? "APPSTACK_API_KEY" : undefined,
+    keys.ios ? "APPSTACK_IOS_API_KEY" : undefined,
+    keys.android ? "APPSTACK_ANDROID_API_KEY" : undefined,
+  ].filter(Boolean);
+  const steps: Record<WorkflowId, string> = {
+    integrate: "An agent would install the latest SDK, configure it once at startup, and store the keys with the project's config mechanism.",
+    review: "An agent would audit the integration read-only and report up to 5 findings by severity.",
+    upgrade: "An agent would update the dependency and lockfile, migrate changed calls, and run a build.",
+  };
+  ui.info(`Plan: ${steps[command]}`);
+  if (command === "integrate") {
+    ui.info(
+      names.length
+        ? `Keys supplied: ${names.join(", ")} (values are never printed).`
+        : "No API key supplied. Set APPSTACK_API_KEY, or APPSTACK_IOS_API_KEY and APPSTACK_ANDROID_API_KEY, or the agent will look for an existing project config value.",
+    );
+  }
+  if (inspection.partners.length) {
+    ui.info(`Partner SDKs detected: ${inspection.partners.join(", ")}.`);
   }
 }
 
@@ -87,7 +149,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
 
   if (!args.skill) {
     ui.intro(`Appstack ${args.command}`);
-    printInspection(inspection);
+    printInspection(inspection, args.command);
     if (samePlatformKey) {
       ui.warning("The supplied iOS and Android API keys are identical. Use a different key for each platform when available.");
     }
@@ -95,7 +157,11 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
 
   if (args.command === "upgrade") {
     if (!inspection.installedVersion) {
-      throw new Error("No installed Appstack SDK version was detected. Run `appstack integrate` instead.");
+      throw new Error(
+        inspection.installed
+          ? "The Appstack SDK is installed, but its version could not be read from the project. Pass --to <version> to upgrade explicitly."
+          : "No installed Appstack SDK was detected. Run `appstack integrate` instead.",
+      );
     }
     if (!latest?.version) {
       throw new Error(
@@ -111,14 +177,18 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
   }
 
   const buildWorkflowPrompt = async (): Promise<string> => {
+    // Review and integrate recommend or install an exact version; resolve it
+    // here so agents without web access still name the current release.
+    const promptLatest = latest ?? (await resolveLatestVersion(project.framework));
     const resolvedSkill = await resolveSkill({
       framework: project.framework,
+      references: taskReferences(args.command, inspection),
       refresh: !args.dryRun,
     });
     return buildPrompt({
       workflow: args.command,
       inspection,
-      latest,
+      latest: promptLatest,
       skill: resolvedSkill.body,
       apiKeys: {
         generic: Boolean(keyValues.generic),
@@ -138,6 +208,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
   }
 
   if (args.dryRun) {
+    printPlan(args.command, inspection, keyValues);
     ui.info("Dry run: no agent started and no files changed.");
     ui.outro("Inspection complete");
     return;
@@ -190,7 +261,8 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     );
   }
 
-  if (result.finalText) ui.report(result.finalText);
+  const report = result.finalText ? stripStatusLines(result.finalText) : "";
+  if (report) ui.report(report);
   if (args.command !== "review") {
     const after = inspectProject(project);
     const verification = verifyWorkflowPostconditions({
@@ -205,7 +277,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     }
     if (after.findings.length) {
       ui.warning("The workflow finished with remaining deterministic findings:");
-      printInspection(after);
+      printInspection(after, args.command);
     } else {
       ui.success(
         args.command === "upgrade"

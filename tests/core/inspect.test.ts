@@ -298,3 +298,127 @@ test("finds a workspace lockfile above a React Native app", () => {
   assert.equal(result.installedVersion, "2.6.4");
   assert.equal(result.installedVersionSource, "lockfile");
 });
+
+function kotlinProject(root: string): DetectedProject {
+  return { framework: "kotlin", frameworkLabel: "Kotlin (Android)", path: root, relativePath: ".", name: "fixture" };
+}
+
+test("reads the Android SDK version from a Gradle version catalog", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-catalog-"));
+  mkdirSync(join(root, "gradle"));
+  writeFileSync(join(root, "settings.gradle.kts"), 'include(":app")\n');
+  writeFileSync(
+    join(root, "gradle", "libs.versions.toml"),
+    [
+      "[versions]",
+      'appstack = "1.8.0"',
+      "[libraries]",
+      'appstack-android-sdk = { group = "tech.appstack.android-sdk", name = "appstack-android-sdk", version.ref = "appstack" }',
+    ].join("\n"),
+  );
+  const result = inspectProject(kotlinProject(root));
+  assert.equal(result.installed, true);
+  assert.equal(result.installedVersion, "1.8.0");
+
+  writeFileSync(
+    join(root, "gradle", "libs.versions.toml"),
+    '[libraries]\nappstack = { module = "tech.appstack.android-sdk:appstack-android-sdk", version = "1.11.0" }\n',
+  );
+  assert.equal(inspectProject(kotlinProject(root)).installedVersion, "1.11.0");
+});
+
+test("scans source files in deep Android package directories", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-deep-"));
+  const deep = join(root, "app", "src", "main", "java", "com", "example", "coffee", "billing", "tracking");
+  mkdirSync(deep, { recursive: true });
+  writeFileSync(join(root, "settings.gradle.kts"), 'include(":app")\n');
+  writeFileSync(join(deep, "Tracker.kt"), "AppstackAttributionSdk.sendEvent(EventType.LOGIN)\n");
+  assert.equal(inspectProject(kotlinProject(root)).eventCallCount, 1);
+});
+
+test("does not treat another vendor's pk_ key as an Appstack key", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-superwall-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: {} }));
+  writeFileSync(
+    join(root, "app.tsx"),
+    [
+      "Superwall.configure({ apiKey: 'pk_d1f0a2b3c4d5e6f7a8b9' });",
+      "const appstackKey = 'pk_legacyAppstack123456';",
+    ].join("\n"),
+  );
+  const result = inspectProject(reactNativeProject(root));
+  assert.deepEqual(result.findings.find((item) => item.code === "hardcoded-api-key")?.files, ["app.tsx"]);
+
+  writeFileSync(join(root, "app.tsx"), "Superwall.configure({ apiKey: 'pk_d1f0a2b3c4d5e6f7a8b9' });\n");
+  assert.equal(
+    inspectProject(reactNativeProject(root)).findings.some((item) => item.code === "hardcoded-api-key"),
+    false,
+  );
+});
+
+test("detects one legacy key reused across platforms in EAS build profiles", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-eas-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { expo: "54.0.0" } }));
+  writeFileSync(
+    join(root, "eas.json"),
+    JSON.stringify({ build: { production: { env: {
+      APPSTACK_IOS_API_KEY: "pk_sharedLegacy123456",
+      APPSTACK_ANDROID_API_KEY: "pk_sharedLegacy123456",
+    } } } }),
+  );
+  const result = inspectProject(reactNativeProject(root));
+  assert.deepEqual(
+    result.findings.find((item) => item.code === "api-key-reused-across-platforms")?.files,
+    ["eas.json"],
+  );
+  assert.equal(JSON.stringify(result).includes("sharedLegacy123456"), false);
+});
+
+test("detects iOS and Android key variables wired to the wrong platform", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-crosswired-"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: {} }));
+  writeFileSync(
+    join(root, "app.config.ts"),
+    "export default { extra: { iosApiKey: process.env.APPSTACK_ANDROID_API_KEY } };\n",
+  );
+  writeFileSync(
+    join(root, "keys.ts"),
+    "Platform.select({ ios: Config.APPSTACK_IOS_API_KEY, android: Config.APPSTACK_ANDROID_API_KEY });\n",
+  );
+  const result = inspectProject(reactNativeProject(root));
+  assert.deepEqual(
+    result.findings.find((item) => item.code === "api-key-env-crosswired")?.files,
+    ["app.config.ts"],
+  );
+});
+
+test("reports 2.x call shapes that throw on React Native SDK 3.x", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-rn3-"));
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({ dependencies: { "react-native-appstack-sdk": "3.4.0" } }),
+  );
+  writeFileSync(join(root, "app.tsx"), "AppstackSDK.sendEvent('CUSTOM', 'session_attributes', {});\n");
+  const removed = inspectProject(reactNativeProject(root)).findings.find(
+    (item) => item.code === "react-native-removed-api",
+  );
+  assert.equal(removed?.severity, "error");
+
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({ dependencies: { "react-native-appstack-sdk": "2.6.0" } }),
+  );
+  assert.equal(
+    inspectProject(reactNativeProject(root)).findings.some((item) => item.code === "react-native-removed-api"),
+    false,
+  );
+});
+
+test("detects RevenueCat and Superwall from dependencies", () => {
+  const root = mkdtempSync(join(tmpdir(), "appstack-inspect-partners-"));
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({ dependencies: { "react-native-purchases": "9.12.0", "expo-superwall": "1.0.5" } }),
+  );
+  assert.deepEqual(inspectProject(reactNativeProject(root)).partners, ["revenuecat", "superwall"]);
+});

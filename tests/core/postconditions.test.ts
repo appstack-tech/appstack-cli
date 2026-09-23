@@ -18,6 +18,7 @@ function inspection(overrides: Partial<Inspection> = {}): Inspection {
     configureCount: 1,
     eventCallCount: 0,
     customEventNames: [],
+    partners: [],
     findings: [],
     ...overrides,
   };
@@ -78,4 +79,22 @@ test("React Native upgrade requires a lockfile-resolved version", () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join(" "), /not resolved from a lockfile/);
+});
+
+test("upgrade fails while React Native 2.x call shapes remain", () => {
+  const result = verifyWorkflowPostconditions({
+    workflow: "upgrade",
+    targetVersion: "3.5.1",
+    after: inspection({
+      installedVersion: "3.5.1",
+      findings: [{
+        code: "react-native-removed-api",
+        severity: "error",
+        message: "removed",
+        files: ["src/appstack.ts"],
+      }],
+    }),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join(" "), /Removed 2\.x call shapes remain in src\/appstack\.ts/);
 });
