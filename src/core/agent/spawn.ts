@@ -84,6 +84,46 @@ export function spawnFailure(
   return undefined;
 }
 
+// Agents can stream several status markers without a newline between them;
+// each marker starts a new status.
+export function statusMessages(text: string): string[] {
+  return text
+    .split("\n")
+    .flatMap((line) => line.split("[STATUS]").slice(1))
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
 export function extractStatus(text: string): string | undefined {
-  return text.match(/\[STATUS\]\s*(.+?)\s*$/m)?.[1]?.trim();
+  return statusMessages(text).at(-1);
+}
+
+// Status text that arrives as deltas is only reported once its line is
+// complete, so partial words never reach the UI.
+export function createStatusStream(onStatus: (status: string) => void): {
+  push(delta: string): void;
+  end(): void;
+} {
+  let pending = "";
+  let last: string | undefined;
+  const emit = (text: string) => {
+    for (const status of statusMessages(text)) {
+      if (status === last) continue;
+      last = status;
+      onStatus(status);
+    }
+  };
+  return {
+    push(delta) {
+      pending += delta;
+      const newline = pending.lastIndexOf("\n");
+      if (newline === -1) return;
+      emit(pending.slice(0, newline));
+      pending = pending.slice(newline + 1);
+    },
+    end() {
+      emit(pending);
+      pending = "";
+    },
+  };
 }

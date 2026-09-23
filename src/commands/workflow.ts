@@ -177,6 +177,9 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
   }
 
   const buildWorkflowPrompt = async (): Promise<string> => {
+    // Review and integrate recommend or install an exact version; resolve it
+    // here so agents without web access still name the current release.
+    const promptLatest = latest ?? (await resolveLatestVersion(project.framework));
     const resolvedSkill = await resolveSkill({
       framework: project.framework,
       references: taskReferences(args.command, inspection),
@@ -185,7 +188,7 @@ export async function runWorkflow(args: WorkflowArgs): Promise<void> {
     return buildPrompt({
       workflow: args.command,
       inspection,
-      latest,
+      latest: promptLatest,
       skill: resolvedSkill.body,
       apiKeys: {
         generic: Boolean(keyValues.generic),

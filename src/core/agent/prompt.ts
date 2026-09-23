@@ -13,7 +13,7 @@ export interface PromptOptions {
   verbose?: boolean;
 }
 
-function inspectionText(inspection: Inspection): string {
+function inspectionText(inspection: Inspection, latest?: LatestVersion): string {
   const findings = inspection.findings.length
     ? inspection.findings
         .map((item) => `- [${item.severity}] ${item.code}: ${item.message}`)
@@ -23,6 +23,7 @@ function inspectionText(inspection: Inspection): string {
     `Framework: ${inspection.project.frameworkLabel}`,
     `App path: ${inspection.project.path}`,
     `Installed SDK version: ${inspection.installedVersion ?? "not detected"}`,
+    `Latest stable SDK version: ${latest?.version ? `${latest.version} (${latest.source}); use this exact version wherever you install or recommend pinning one` : "not resolved by the CLI; look it up in the platform registry before naming a version"}`,
     `Configure calls: ${inspection.configureCount}`,
     `Event calls: ${inspection.eventCallCount}`,
     `Partner SDKs: ${inspection.partners.length ? inspection.partners.join(", ") : "none detected"}`,
@@ -89,7 +90,7 @@ ${keyContext(options.apiKeys, Boolean(options.copyMode))}`;
 
 Return a short markdown report only:
 - Overall: one sentence.
-- Findings: at most 5 verified, actionable problems, ordered by severity. Head each finding with its severity in bold, for example **[High]**, then give one-line Impact, Evidence (absolute clickable file:line), and Change. When a change pins a version, name the exact version.
+- Findings: at most 5 verified, actionable problems, ordered by severity. With none, write exactly "Findings: none." and do not list the checks that passed. Head each finding with its severity in bold, for example **[High]**, then give one-line Impact, Evidence (absolute clickable file:line), and Change. When a change pins a version, name the exact version.
 - Needs confirmation: at most 3 items, each of which would change an Appstack finding if answered. Never ask about dev/prod environment mapping, key rotation, or other vendors' configuration. Omit the section when there are none.
 
 ${SEVERITY}
@@ -127,7 +128,7 @@ export function buildPrompt(options: PromptOptions): string {
     "<appstack-cli>",
     task(options),
     "",
-    inspectionText(options.inspection),
+    inspectionText(options.inspection, options.latest),
     "",
     "Operating rules:",
     "- Read a file before editing it and preserve the project's style.",

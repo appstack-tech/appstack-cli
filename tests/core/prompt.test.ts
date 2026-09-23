@@ -165,3 +165,20 @@ test("key-assignment rules are scoped to apps that target both platforms", () =>
   assert.match(prompt, /For a single-platform app, do not add key-assignment warnings or sections/);
   assert.doesNotMatch(prompt, /trace which distinct key reaches each target/);
 });
+
+test("names the CLI-resolved latest version, or asks for a registry lookup", () => {
+  const resolved = buildPrompt({
+    workflow: "review",
+    inspection,
+    skill,
+    latest: { version: "4.7.2", source: "GitHub Releases (ios-appstack-sdk)" },
+  });
+  assert.match(resolved, /Latest stable SDK version: 4\.7\.2 \(GitHub Releases \(ios-appstack-sdk\)\); use this exact version/);
+  const unresolved = buildPrompt({ workflow: "integrate", inspection, skill });
+  assert.match(unresolved, /Latest stable SDK version: not resolved by the CLI; look it up/);
+});
+
+test("an empty review is a single line without a list of passed checks", () => {
+  const prompt = buildPrompt({ workflow: "review", inspection, skill });
+  assert.match(prompt, /write exactly "Findings: none\." and do not list the checks that passed/);
+});
