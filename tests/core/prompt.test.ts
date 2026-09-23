@@ -173,7 +173,8 @@ test("names the CLI-resolved latest version, or asks for a registry lookup", () 
     skill,
     latest: { version: "4.7.2", source: "GitHub Releases (ios-appstack-sdk)" },
   });
-  assert.match(resolved, /Latest stable SDK version: 4\.7\.2 \(GitHub Releases \(ios-appstack-sdk\)\); use this exact version/);
+  assert.match(resolved, /Latest stable SDK version: 4\.7\.2 \(GitHub Releases \(ios-appstack-sdk\)\)\. Use this exact version when installing/);
+  assert.match(resolved, /a semver range resolved by a lockfile, is not a finding by itself/);
   const unresolved = buildPrompt({ workflow: "integrate", inspection, skill });
   assert.match(unresolved, /Latest stable SDK version: not resolved by the CLI; look it up/);
 });

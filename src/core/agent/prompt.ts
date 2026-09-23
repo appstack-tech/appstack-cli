@@ -23,7 +23,7 @@ function inspectionText(inspection: Inspection, latest?: LatestVersion): string 
     `Framework: ${inspection.project.frameworkLabel}`,
     `App path: ${inspection.project.path}`,
     `Installed SDK version: ${inspection.installedVersion ?? "not detected"}`,
-    `Latest stable SDK version: ${latest?.version ? `${latest.version} (${latest.source}); use this exact version wherever you install or recommend pinning one` : "not resolved by the CLI; look it up in the platform registry before naming a version"}`,
+    `Latest stable SDK version: ${latest?.version ? `${latest.version} (${latest.source}). Use this exact version when installing, or when a finding already requires pinning a dynamic version such as Gradle \`+\`. An older installed version, or a semver range resolved by a lockfile, is not a finding by itself` : "not resolved by the CLI; look it up in the platform registry before naming a version"}`,
     `Configure calls: ${inspection.configureCount}`,
     `Event calls: ${inspection.eventCallCount}`,
     `Partner SDKs: ${inspection.partners.length ? inspection.partners.join(", ") : "none detected"}`,
