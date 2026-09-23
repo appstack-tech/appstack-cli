@@ -65,8 +65,11 @@ export interface Inspection {
   configureCount: number;
   eventCallCount: number;
   customEventNames: string[];
+  partners: Partner[];
   findings: Finding[];
 }
+
+export type Partner = "revenuecat" | "superwall";
 
 interface PackageJson {
   dependencies?: Record<string, string>;
@@ -194,6 +197,21 @@ function swiftVersion(root: string): string | undefined {
   return undefined;
 }
 
+function catalogVersion(text: string): string | undefined {
+  const line = text
+    .split("\n")
+    .find((item) => /appstack-android-sdk/.test(item) && /tech\.appstack\.android-sdk/.test(item));
+  if (!line) return undefined;
+  const inline =
+    line.match(/tech\.appstack\.android-sdk:appstack-android-sdk:([0-9A-Za-z.+_-]+)/)?.[1] ??
+    line.match(/\bversion\s*=\s*"([^"]+)"/)?.[1];
+  if (inline) return inline;
+  const ref = line.match(/\bversion\.ref\s*=\s*"([^"]+)"/)?.[1];
+  if (!ref) return undefined;
+  const escaped = ref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.match(new RegExp(`^\\s*["']?${escaped}["']?\\s*=\\s*"([^"]+)"`, "m"))?.[1];
+}
+
 function kotlinVersion(root: string): string | undefined {
   const files = fg.sync("**/*.{gradle,kts}", {
     cwd: root,
@@ -206,6 +224,16 @@ function kotlinVersion(root: string): string | undefined {
       /tech\.appstack\.android-sdk:appstack-android-sdk:([0-9A-Za-z.+_-]+)/,
     );
     if (match?.[1]) return stableVersion(match[1]);
+  }
+  const catalogs = fg.sync("**/*.versions.toml", {
+    cwd: root,
+    absolute: true,
+    ignore: IGNORE,
+    deep: 7,
+  });
+  for (const catalog of catalogs) {
+    const version = catalogVersion(readText(catalog) ?? "");
+    if (version) return stableVersion(version);
   }
   return undefined;
 }
@@ -265,7 +293,7 @@ function dependencyInstalled(project: DetectedProject): boolean {
         .some((file) => /(?:ios-appstack-sdk|AppstackSDK)/i.test(readText(file) ?? ""));
     case "kotlin":
       return fg
-        .sync(["**/*.{gradle,kts}", "**/libs.versions.toml"], {
+        .sync(["**/*.{gradle,kts}", "**/*.versions.toml"], {
           cwd: project.path,
           absolute: true,
           ignore: IGNORE,
@@ -299,7 +327,7 @@ function sourceFiles(project: DetectedProject): string[] {
     cwd: project.path,
     absolute: true,
     ignore: IGNORE,
-    deep: 8,
+    deep: 16,
   });
 }
 
@@ -323,6 +351,15 @@ function keyLiterals(value: unknown): string[] {
   return [];
 }
 
+// Other vendors (Superwall, for example) also issue pk_ keys. A legacy key only
+// counts as an Appstack key when its line mentions Appstack; platform-prefixed
+// keys are always Appstack keys.
+function sourceKeyLiterals(text: string): string[] {
+  return text.split("\n").flatMap((line) =>
+    keyLiterals(line).filter((key) => keyPlatform(key) || /appstack/i.test(line)),
+  );
+}
+
 function keyPlatform(key: string): "ios" | "android" | undefined {
   if (key.startsWith("pk_ios_")) return "ios";
   if (key.startsWith("pk_android_")) return "android";
@@ -336,6 +373,60 @@ function expoPlatformConfig(project: DetectedProject): { ios?: unknown; android?
   return readJson<{ expo?: { ios?: unknown; android?: unknown } }>(
     join(project.path, "app.json"),
   )?.expo;
+}
+
+// EAS injects build-profile env at build time; record each Appstack key under
+// the platform its variable name targets.
+function easPlatformKeys(project: DetectedProject): { ios: string[]; android: string[] } {
+  const result = { ios: [] as string[], android: [] as string[] };
+  if (project.framework !== "react-native") return result;
+  const eas = readJson<{ build?: Record<string, { env?: Record<string, unknown> }> }>(
+    join(project.path, "eas.json"),
+  );
+  for (const profile of Object.values(eas?.build ?? {})) {
+    for (const [name, value] of Object.entries(profile?.env ?? {})) {
+      if (!/APPSTACK/i.test(name)) continue;
+      const platform = /IOS/i.test(name) ? "ios" : /ANDROID/i.test(name) ? "android" : undefined;
+      if (platform) result[platform].push(...keyLiterals(value));
+    }
+  }
+  return result;
+}
+
+const CROSSWIRED_KEY = [
+  /\bios\w*\s*[:=][^\n,;]*\bandroid\w*key/i,
+  /\bios\w*\s*[:=][^\n,;]*_ANDROID_\w*KEY/i,
+  /\bandroid\w*\s*[:=][^\n,;]*\bios\w*key/i,
+  /\bandroid\w*\s*[:=][^\n,;]*_IOS_\w*KEY/i,
+];
+
+const REACT_NATIVE_REMOVED_API = [
+  /sendEvent\s*\(\s*['"]CUSTOM['"]/,
+  /EventType\.CUSTOM\b/,
+  /sendEvent\s*\([^,()]+,\s*(?:null|undefined)\s*,/,
+  /AppstackSDK\.configure\s*\([^,()]+,\s*(?:true|false|__DEV__)\b/,
+];
+
+const PARTNER_PATTERNS: Record<Partner, RegExp> = {
+  revenuecat: /revenuecat|react-native-purchases|purchases_flutter|purchases-ios|RevenueCat/i,
+  superwall: /superwall/i,
+};
+
+function detectPartners(files: string[], root: string): Partner[] {
+  const manifests = [
+    join(root, "package.json"),
+    join(root, "pubspec.yaml"),
+    ...fg.sync(["**/*.{gradle,kts}", "**/*.versions.toml", "**/Package.resolved", "**/project.pbxproj", "Podfile"], {
+      cwd: root,
+      absolute: true,
+      ignore: IGNORE,
+      deep: 7,
+    }),
+  ];
+  const text = [...manifests, ...files].map((file) => readText(file) ?? "").join("\n");
+  return (Object.keys(PARTNER_PATTERNS) as Partner[]).filter((partner) =>
+    PARTNER_PATTERNS[partner].test(text),
+  );
 }
 
 function uniqueFiles(root: string, files: string[]): string[] {
@@ -353,6 +444,10 @@ export function inspectProject(project: DetectedProject): Inspection {
   const manualInstallFiles: string[] = [];
   const keyFiles: string[] = [];
   const wrongPlatformKeyFiles: string[] = [];
+  const crosswiredFiles: string[] = [];
+  const removedApiFiles: string[] = [];
+  const reactNative3 =
+    project.framework === "react-native" && Number(version?.split(".")[0] ?? 0) >= 3;
   const platformKeys: Record<"ios" | "android", Map<string, Set<string>>> = {
     ios: new Map(),
     android: new Map(),
@@ -387,7 +482,7 @@ export function inspectProject(project: DetectedProject): Inspection {
     const deprecatedNamed = /\b(?:isDebug|endpointBaseUrl)\s*[:=]/.test(analyzed);
     const deprecatedReactNativePositional =
       project.framework === "react-native" &&
-      /AppstackSDK\.configure\s*\([^,]+,\s*(?:true|false)\b/s.test(analyzed);
+      /AppstackSDK\.configure\s*\([^,]+,\s*(?:true|false|__DEV__)\b/s.test(analyzed);
     if (deprecatedNamed || deprecatedReactNativePositional) deprecatedFiles.push(file);
     if (
       /(?:EventType\.)?INSTALL\b|\.install\b/.test(analyzed) &&
@@ -395,7 +490,13 @@ export function inspectProject(project: DetectedProject): Inspection {
     ) {
       manualInstallFiles.push(file);
     }
-    const keys = keyLiterals(analyzed);
+    if (analyzed.split("\n").some((line) => CROSSWIRED_KEY.some((pattern) => pattern.test(line)))) {
+      crosswiredFiles.push(file);
+    }
+    if (reactNative3 && REACT_NATIVE_REMOVED_API.some((pattern) => pattern.test(analyzed))) {
+      removedApiFiles.push(file);
+    }
+    const keys = sourceKeyLiterals(analyzed);
     if (keys.length) keyFiles.push(file);
     const platform = filePlatform(project, file);
     if (platform) recordKeys(platform, file, keys);
@@ -419,8 +520,10 @@ export function inspectProject(project: DetectedProject): Inspection {
   const configured = configureCount > 0 || unitySettings;
   const installed = dependencyInstalled(project);
   const expoConfig = expoPlatformConfig(project);
+  const easKeys = easPlatformKeys(project);
   for (const platform of ["ios", "android"] as const) {
     recordKeys(platform, join(project.path, "app.json"), keyLiterals(expoConfig?.[platform]));
+    recordKeys(platform, join(project.path, "eas.json"), easKeys[platform]);
   }
   const reusedKeyFiles = [...platformKeys.ios.entries()]
     .filter(([key]) => platformKeys.android.has(key))
@@ -492,6 +595,22 @@ export function inspectProject(project: DetectedProject): Inspection {
       files: uniqueFiles(project.path, reusedKeyFiles),
     });
   }
+  if (crosswiredFiles.length) {
+    findings.push({
+      code: "api-key-env-crosswired",
+      severity: "warning",
+      message: "An iOS setting reads an Android key variable, or the reverse. Wire each platform to its own key.",
+      files: uniqueFiles(project.path, crosswiredFiles),
+    });
+  }
+  if (removedApiFiles.length) {
+    findings.push({
+      code: "react-native-removed-api",
+      severity: "error",
+      message: "React Native SDK 3.x throws on 2.x call shapes ('CUSTOM' events, EventType.CUSTOM, three-argument sendEvent, positional configure).",
+      files: uniqueFiles(project.path, removedApiFiles),
+    });
+  }
   if (customNames.size > 10) {
     findings.push({
       code: "custom-event-sprawl",
@@ -508,6 +627,7 @@ export function inspectProject(project: DetectedProject): Inspection {
     configureCount,
     eventCallCount,
     customEventNames: [...customNames].sort(),
+    partners: detectPartners(files, project.path),
     findings,
   };
 }

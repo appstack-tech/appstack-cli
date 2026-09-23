@@ -7,7 +7,12 @@ export const REQUIRED_SKILL_FILES = [
   "references/react-native.md",
   "references/flutter.md",
   "references/unity.md",
+  "references/event-design.md",
+  "references/partner-integrations.md",
+  "references/review-troubleshooting.md",
 ] as const;
+
+export type TaskReference = "event-design" | "partner-integrations" | "review-troubleshooting";
 
 export interface SkillCacheState {
   activeRelease?: string;
@@ -23,6 +28,7 @@ export interface ResolvedSkill {
 
 export interface ResolveSkillOptions {
   framework: FrameworkId;
+  references?: TaskReference[];
   refresh: boolean;
   cacheRoot?: string;
   env?: NodeJS.ProcessEnv;

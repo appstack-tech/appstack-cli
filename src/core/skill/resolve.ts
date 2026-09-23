@@ -64,14 +64,14 @@ export async function resolveSkill(
   const env = options.env ?? process.env;
   if (env.APPSTACK_SKILL_DIR) {
     return {
-      body: loadSkillFromRoot(env.APPSTACK_SKILL_DIR, options.framework),
+      body: loadSkillFromRoot(env.APPSTACK_SKILL_DIR, options.framework, options.references),
       source: "override",
     };
   }
 
   const root = skillCacheRoot(options);
   const state = await readSkillState(root);
-  const cached = await loadCachedSkill(root, state, options.framework);
+  const cached = await loadCachedSkill(root, state, options.framework, options.references);
   if (!options.refresh) {
     return cachedOrThrow(
       cached,
@@ -114,7 +114,7 @@ export async function resolveSkill(
       checkedAt: new Date(now).toISOString(),
     };
     await writeSkillState(root, nextState);
-    const installed = await loadCachedSkill(root, nextState, options.framework);
+    const installed = await loadCachedSkill(root, nextState, options.framework, options.references);
     if (!installed) throw new Error("The downloaded skill could not be loaded.");
     return installed;
   } catch (error) {

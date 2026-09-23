@@ -22,6 +22,7 @@ const inspection: Inspection = {
   configureCount: 1,
   eventCallCount: 3,
   customEventNames: [],
+  partners: [],
   findings: [],
 };
 const skill = loadSkillFromRoot(skillRoot, "swift");
@@ -123,4 +124,44 @@ test("integration keeps identical supplied keys available while requesting a cor
   assert.match(prompt, /supplied iOS and Android keys are identical/);
   assert.match(prompt, /Continue with the supplied values/);
   assert.doesNotMatch(prompt, /pk_[A-Za-z0-9_-]{12,}/);
+});
+
+test("composes only the requested task references after the platform reference", () => {
+  const composed = loadSkillFromRoot(skillRoot, "swift", ["review-troubleshooting", "event-design"]);
+  assert.match(composed, /already contains references\/swift\.md, references\/review-troubleshooting\.md, references\/event-design\.md/);
+  assert.match(composed, /# Review and troubleshooting fixture/);
+  assert.match(composed, /# Event design fixture/);
+  assert.doesNotMatch(composed, /# Partner integrations fixture/);
+  assert.ok(composed.indexOf("Appstack Swift SDK") < composed.indexOf("Review and troubleshooting fixture"));
+});
+
+test("default review asks for severity-ordered findings", () => {
+  const prompt = buildPrompt({ workflow: "review", inspection, skill });
+  assert.match(prompt, /\*\*\[High\]\*\*/);
+  assert.match(prompt, /Order High before Medium before Low/);
+  assert.match(prompt, /drop the lowest severity first/);
+  assert.match(prompt, /missing Appstack attribution wiring for that partner is a finding/);
+  assert.match(prompt, /an unchecked return is never a finding/);
+  assert.match(prompt, /High: the app fails to build/);
+  assert.match(prompt, /Never ask about dev\/prod environment mapping/);
+});
+
+test("implementation workflows request a fixed report shape without rule narration", () => {
+  for (const workflow of ["integrate", "upgrade"] as const) {
+    const prompt = buildPrompt({ workflow, inspection, skill });
+    assert.match(prompt, /- Verified: the commands you ran/);
+    assert.match(prompt, /- You need to:/);
+    assert.match(prompt, /do not describe rules you followed/);
+  }
+  const integrate = buildPrompt({ workflow: "integrate", inspection, skill });
+  assert.match(integrate, /where each supplied key is stored/);
+  assert.match(integrate, /skip configure with a logged message/);
+  assert.match(integrate, /Expo Go cannot load the SDK/);
+  assert.match(integrate, /inside the app directory/);
+});
+
+test("key-assignment rules are scoped to apps that target both platforms", () => {
+  const prompt = buildPrompt({ workflow: "upgrade", inspection, skill });
+  assert.match(prompt, /For a single-platform app, do not add key-assignment warnings or sections/);
+  assert.doesNotMatch(prompt, /trace which distinct key reaches each target/);
 });

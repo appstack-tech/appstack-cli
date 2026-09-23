@@ -87,6 +87,7 @@ export async function loadCachedSkill(
   root: string,
   state: SkillCacheState,
   framework: ResolveSkillOptions["framework"],
+  references: ResolveSkillOptions["references"] = [],
 ): Promise<ResolvedSkill | undefined> {
   if (!validRelease(state.activeRelease)) return undefined;
   const directory = join(root, state.activeRelease);
@@ -94,7 +95,7 @@ export async function loadCachedSkill(
     await access(join(directory, COMPLETE_FILE));
     await Promise.all(REQUIRED_SKILL_FILES.map((path) => access(join(directory, path))));
     return {
-      body: loadSkillFromRoot(directory, framework),
+      body: loadSkillFromRoot(directory, framework, references),
       source: "cache",
       release: state.activeRelease,
     };

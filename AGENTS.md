@@ -18,9 +18,12 @@ policy, and rendering.
 
 The skill is never vendored or published with the CLI. At run time the CLI
 downloads the latest `appstack-skills` GitHub Release, caches it, and composes
-the shared `SKILL.md` with exactly one framework reference. If no cache exists
-and the network is unavailable, resolution must fail loudly rather than load a
-stale copy. Never load unrelated framework instructions into a run.
+the shared `SKILL.md` with exactly one framework reference plus the
+framework-neutral task references the workflow needs (review loads review and
+event design; a detected RevenueCat or Superwall dependency adds partner
+integrations). If no cache exists and the network is unavailable, resolution
+must fail loudly rather than load a stale copy. Never load unrelated framework
+instructions into a run.
 
 ## Verification
 

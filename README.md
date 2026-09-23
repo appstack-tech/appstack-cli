@@ -52,7 +52,8 @@ entry, and asks for confirmation before any command changes files.
 | `--verbose` | Exhaustive audit for `review` |
 
 Reviews are concise by default: one overall status, up to five verified
-findings, and a short needs-confirmation list. Add `--verbose` for the full
+findings tagged High, Medium, or Low and ordered by severity, and a short
+needs-confirmation list. Add `--verbose` for the full
 audit.
 
 ## Try it
