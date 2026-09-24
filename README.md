@@ -1,10 +1,36 @@
-# Appstack CLI
+<p align="center">
+  <a href="https://docs.appstack.tech/tooling/cli">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/appstack-tech/appstack-cli/main/.github/assets/appstack_cli_wordmark_dark.svg">
+      <img alt="Appstack CLI" src="https://raw.githubusercontent.com/appstack-tech/appstack-cli/main/.github/assets/appstack_cli_wordmark_light.svg" width="460">
+    </picture>
+  </a>
+</p>
 
-Agent-powered integration, review, and upgrades for the Appstack mobile
-attribution SDKs.
+<p align="center">
+  Agent-powered integration, review, and upgrades for the Appstack mobile attribution SDKs.
+</p>
 
-It works with Swift/iOS, Kotlin/Android, React Native, Flutter, and Unity apps.
-It does not create Appstack accounts, apps, campaigns, or dashboard resources.
+<p align="center">
+  <a href="https://www.npmjs.com/package/appstack-cli"><img alt="npm" src="https://img.shields.io/npm/v/appstack-cli.svg"></a>
+  <img alt="Node" src="https://img.shields.io/badge/node-20%2B-blue.svg">
+  <a href="https://github.com/appstack-tech/appstack-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey.svg"></a>
+</p>
+
+<p align="center">
+  <a href="https://docs.appstack.tech/tooling/cli"><b>Documentation</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/appstack-tech/appstack-cli/releases">Releases</a>
+  &nbsp;·&nbsp;
+  <a href="https://www.appstack.tech/contact">Support</a>
+</p>
+
+---
+
+The Appstack CLI detects your app, runs deterministic checks, and hands off to
+your coding agent to integrate, review, or upgrade the Appstack SDK. It works
+with Swift/iOS, Kotlin/Android, React Native, Flutter, and Unity apps. It does
+not create Appstack accounts, apps, campaigns, or dashboard resources.
 
 ## How it works
 
@@ -92,6 +118,14 @@ every 24 hours. The first run needs network access. Set
 `APPSTACK_SKILL_UPDATES=off` to disable refreshes, or
 `APPSTACK_SKILL_DIR=/path/to/appstack-sdk` to use a local development copy.
 
+## Supported SDKs
+
+[iOS](https://docs.appstack.tech/SDKs/swift) · [Android](https://docs.appstack.tech/SDKs/kotlin) · [React Native](https://docs.appstack.tech/SDKs/react-native) · [Flutter](https://docs.appstack.tech/SDKs/flutter) · [Unity](https://docs.appstack.tech/SDKs/unity)
+
+## Support
+
+Questions or issues? [Open an issue](https://github.com/appstack-tech/appstack-cli/issues) or [contact us](https://www.appstack.tech/contact).
+
 ## License
 
-MIT
+Released under the [MIT License](https://github.com/appstack-tech/appstack-cli/blob/main/LICENSE).
