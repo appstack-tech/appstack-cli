@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://docs.appstack.tech/tooling/cli">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/appstack-tech/appstack-cli/main/.github/assets/appstack_cli_wordmark_dark.svg">
-      <img alt="Appstack CLI" src="https://raw.githubusercontent.com/appstack-tech/appstack-cli/main/.github/assets/appstack_cli_wordmark_light.svg" width="460">
+      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/appstack_cli_wordmark_dark.svg">
+      <img alt="Appstack CLI" src=".github/assets/appstack_cli_wordmark_light.svg" width="460">
     </picture>
   </a>
 </p>
